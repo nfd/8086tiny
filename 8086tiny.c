@@ -5,6 +5,9 @@
 //
 // This work is licensed under the MIT License. See included LICENSE.TXT.
 
+#define __USE_POSIX199309
+#define _POSIX_C_SOURCE 199309L
+
 #include <time.h>
 #include <sys/timeb.h>
 #include <memory.h>
@@ -677,6 +680,13 @@ int main(int argc, char **argv)
 							? ((char)i_data0 == 3 ? (int(*)())write : (int(*)())read)(disk[regs8[REG_DL]], mem + SEGREG(REG_ES, REG_BX,), regs16[REG_AX])
 							: 0;
 				}
+			OPCODE 54: // HLT
+			{
+				struct timespec ts;
+				ts.tv_sec = 0;
+				ts.tv_nsec = 100 * 1000;
+				nanosleep(&ts, NULL);
+			}
 		}
 
 		// Increment instruction pointer by computed instruction length. Tables in the BIOS binary

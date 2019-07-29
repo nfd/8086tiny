@@ -339,13 +339,12 @@ next_out:
 
 int19:
 	xor	ax, ax
-	push	ax
-	popf
 	mov	ds, ax
 	mov	es, ax
 	mov	ss, ax
 	mov	sp, 7C00h
-
+	push	ax
+	popf
 
 ; Read boot sector from FDD, and load it into 0:7C00
 
@@ -355,12 +354,56 @@ int19:
 	mov	cx, 1
 	mov	bx, sp
 	int	13h
+	jc	.error_reading
+
+	cmp	word [bx + 510], 0AA55h
+	jne	.error_signature
 
 ; Jump to boot sector
 
 	push es
 	push bx
 	retf
+
+.error_reading:
+	mov si, msg.error_reading
+	jmp .error
+
+.error_signature:
+	mov si, msg.error_signature
+
+.error:
+	push cs
+	pop ds
+	push si
+	mov si, msg.error_boot
+	call disp_msg
+	pop si
+	call disp_msg
+	xor ax, ax
+	int 13h
+	xor ax, ax
+	int 16h
+	int 19h
+
+
+disp_msg.disp:
+	mov ah, 0Eh
+	mov bx, 7
+	push bp
+	int 10h
+	pop bp
+disp_msg:
+	lodsb
+	test al, al
+	jnz .disp
+	retn
+
+
+msg:
+.error_boot:		db "Error during boot!",13,10,0
+.error_reading: 	db "Could not read from bot device.",13,10,0
+.error_signature:	db "Boot sector signature mismatch.",13,10,0
 
 
 ; ************************* INT 7h handler - keyboard driver (8086tiny internal)

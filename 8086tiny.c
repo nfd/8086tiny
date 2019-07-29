@@ -559,7 +559,6 @@ int main(int argc, char **argv)
 					extra & 2 || INDEX_INC(REG_DI);
 					rep_override_en && regs16[REG_CX]--;
 				}
-				rep_override_en = seg_override_en = 0;
 			OPCODE 18: // CMPSx (extra=0)|SCASx (extra=1)
 				scratch2_uint = seg_override_en ? seg_override : REG_DS;
 
@@ -586,7 +585,6 @@ int main(int argc, char **argv)
 
 					set_flags_type = FLAGS_UPDATE_SZP | FLAGS_UPDATE_AO_ARITH; // Funge to set SZP/AO flags
 					set_CF(op_result > op_dest);
-					rep_override_en = seg_override_en = 0;
 				}
 			OPCODE 19: // RET|RETF|IRET
 				i_d = i_w;
@@ -710,6 +708,10 @@ int main(int argc, char **argv)
 			OPCODE 54: // HLT
 				hlt_this_time = 1;
 		}
+		if (xlat_opcode_id != 23 && xlat_opcode_id != 27) {
+			rep_override_en = seg_override_en = 0;
+		}
+
 
 		// Increment instruction pointer by computed instruction length. Tables in the BIOS binary
 		// help us here.

@@ -19,6 +19,9 @@ DISCLAIMER: THE WORKS ARE WITHOUT WARRANTY.
 	defaulting
 
 	numdef DEBUG4
+	numdef CHECK_8086TINY, 1
+	numdef USE_8086TINY_CALL, 1
+	gendef UMBLIST, {0D000h, 2000h}
 
 
 	cpu 8086
@@ -43,7 +46,7 @@ opt_hma_in_use equ 1
 
 	align 4
 umbtable:
-	dw 0D000h, 2000h
+	dw _UMBLIST
 	dw 0, 0
 
 
@@ -92,11 +95,13 @@ xmsentry:
 
 
 .call:
+%if _USE_8086TINY_CALL
 	stc
 	db 0Fh, 04h		; call into emulator
 		; The emulator handles functions 8 to 0Fh.
 		; These need access to extended memory.
 	jnc .retf
+%endif
 	jmp .invalid
 
 
@@ -324,16 +329,44 @@ strategy_init:
 	mov word [es:bx + 12h], ax
 	mov word [es:bx + 12h + 2], ax	; BPB array (none)
 
+%if _CHECK_8086TINY
+	mov dx, msg.error_not_8086tiny
+	mov ax, 0F000h
+	mov es, ax
+	xor di, di
+	mov cx, -1
+@@:
+	mov al, '8'
+	repne scasb
+	jne .error
+	push di
+	push cx
+	dec di
+	mov si, msg.signature
+	mov cx, msg.signature.length
+	repe cmpsb
+	pop cx
+	pop di
+	jne @B
+%endif
+
 	mov ax, 4300h
 	int 2Fh
 	cmp al, 80h
 	mov dx, msg.error_already
 	jne @F
+.error:
 	mov ah, 09h
 	int 21h
 	jmp .return
 
 @@:
+%if _USE_8086TINY_CALL
+	xor ax, ax
+	clc			; NC, ax=0: free all allocations (after reboot)
+	db 0Fh, 04h
+%endif
+
 	mov ax, 352Fh
 	int 21h
 	mov word [i2F.next], bx
@@ -362,4 +395,9 @@ strategy_init:
 	retf
 
 msg:
-.error_already:	ascic "8tinyxms: An XMS handler is already installed. Unloading.",13,10
+.error_already:	ascic "tinyxms: An XMS handler is already installed. Unloading.",13,10
+%if _CHECK_8086TINY
+.error_not_8086tiny:	ascic "tinyxms: Not running in 8086tiny. Unloading.",13,10
+.signature:		db "8086tiny BIOS"
+.signature.length: equ $ - .signature
+%endif

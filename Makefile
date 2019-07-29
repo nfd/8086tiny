@@ -12,17 +12,20 @@ OPTS_SDL=`sdl-config --cflags --libs`
 OPTS_NOGFX=-DNO_GRAPHICS
 OPTS_SLOWCPU=-DGRAPHICS_UPDATE_DELAY=25000
 
-8086tiny: 8086tiny.c
+bios.bin: bios.asm
+	nasm -f bin -l bios.lst -o bios.bin bios.asm
+
+8086tiny: 8086tiny.c bios.bin
 	${CC} 8086tiny.c ${OPTS_SDL} ${OPTS_ALL} -o 8086tiny
 	strip 8086tiny
 
-8086tiny_slowcpu: 8086tiny.c
+8086tiny_slowcpu: 8086tiny.c bios.bin
 	${CC} 8086tiny.c ${OPTS_SDL} ${OPTS_ALL} ${OPTS_SLOWCPU} -o 8086tiny
 	strip 8086tiny
 
-no_graphics: 8086tiny.c
+no_graphics: 8086tiny.c bios.bin
 	${CC} 8086tiny.c ${OPTS_NOGFX} ${OPTS_ALL} -o 8086tiny
 	strip 8086tiny
 
 clean:
-	rm 8086tiny
+	rm -f 8086tiny bios.bin bios.lst

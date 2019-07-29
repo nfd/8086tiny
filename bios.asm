@@ -207,7 +207,8 @@ calc_end:
 	
 ; Main BIOS entry point. Zero the flags, and set up registers.
 
-boot:	mov	ax, 0
+boot:
+	xor	ax, ax
 	push	ax
 	popf
 
@@ -331,21 +332,36 @@ next_out:
 	mov	ax, [es:tm_msec]
 	mov	[cs:last_int8_msec], ax
 
-; Read boot sector from FDD, and load it into 0:7C00
+	int	19h
 
-	mov	ax, 0
+
+; ************************* INT 19h = reboot
+
+int19:
+	xor	ax, ax
+	push	ax
+	popf
+	mov	ds, ax
 	mov	es, ax
+	mov	ss, ax
+	mov	sp, 7C00h
+
+
+; Read boot sector from FDD, and load it into 0:7C00
 
 	mov	ax, 0x0201
 	mov	dh, 0
 	mov	dl, [cs:boot_device]
 	mov	cx, 1
-	mov	bx, 0x7c00
+	mov	bx, sp
 	int	13h
 
 ; Jump to boot sector
 
-	jmp	0:0x7c00
+	push es
+	push bx
+	retf
+
 
 ; ************************* INT 7h handler - keyboard driver (8086tiny internal)
 
@@ -2562,10 +2578,6 @@ int17:
 	mov	ah, 1 ; No printer
 	jmp	reach_stack_stc
 
-; ************************* INT 19h = reboot
-
-int19:
-	jmp	boot
 
 ; ************************* INT 1Ah - clock
 

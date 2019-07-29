@@ -62,8 +62,9 @@ bios_entry:
 
 	; Set up initial stack to F000:F000
 
-	mov	sp, 0xf000
-	mov	ss, sp
+	mov	di, 0xf000
+	mov	ss, di
+	mov	sp, di
 
 	push	cs
 	pop	es

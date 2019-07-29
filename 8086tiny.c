@@ -552,10 +552,8 @@ int main(int argc, char **argv)
 					MEM_OP(extra < 2 ? SEGREG(REG_ES, REG_DI,) : REGS_BASE, =, extra & 1 ? REGS_BASE : SEGREG(scratch2_uint, REG_SI,)),
 					extra & 1 || INDEX_INC(REG_SI),
 					extra & 2 || INDEX_INC(REG_DI);
+					rep_override_en && regs16[REG_CX]--;
 				}
-
-				if (rep_override_en)
-					regs16[REG_CX] = 0
 			OPCODE 18: // CMPSx (extra=0)|SCASx (extra=1)
 				scratch2_uint = seg_override_en ? seg_override : REG_DS;
 
@@ -565,7 +563,8 @@ int main(int argc, char **argv)
 					{
 						MEM_OP(extra ? REGS_BASE : SEGREG(scratch2_uint, REG_SI,), -, SEGREG(REG_ES, REG_DI,)),
 						extra || INDEX_INC(REG_SI),
-						INDEX_INC(REG_DI), rep_override_en && !(--regs16[REG_CX] && (!op_result == rep_mode)) && (scratch_uint = 0);
+						INDEX_INC(REG_DI),
+						rep_override_en && !(--regs16[REG_CX] && (!op_result == rep_mode)) && (scratch_uint = 0);
 					}
 
 					set_flags_type = FLAGS_UPDATE_SZP | FLAGS_UPDATE_AO_ARITH; // Funge to set SZP/AO flags

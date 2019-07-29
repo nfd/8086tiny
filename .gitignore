@@ -1,4 +1,6 @@
 bios.bin
 bios.lst
+tinyxms.sys
+tinyxms.lst
 8086tiny
 hd.img

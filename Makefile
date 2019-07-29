@@ -15,17 +15,20 @@ OPTS_SLOWCPU=-DGRAPHICS_UPDATE_DELAY=25000
 bios.bin: bios.asm
 	nasm -f bin -l bios.lst -o bios.bin bios.asm
 
-8086tiny: 8086tiny.c bios.bin
+tinyxms.sys: tinyxms.asm
+	nasm -f bin -I ../lmacros/ -I lmacros/ -l tinyxms.lst -o tinyxms.sys tinyxms.asm
+
+8086tiny: 8086tiny.c bios.bin tinyxms.sys
 	${CC} 8086tiny.c ${OPTS_SDL} ${OPTS_ALL} -o 8086tiny
 	strip 8086tiny
 
-8086tiny_slowcpu: 8086tiny.c bios.bin
+8086tiny_slowcpu: 8086tiny.c bios.bin tinyxms.sys
 	${CC} 8086tiny.c ${OPTS_SDL} ${OPTS_ALL} ${OPTS_SLOWCPU} -o 8086tiny
 	strip 8086tiny
 
-no_graphics: 8086tiny.c bios.bin
+no_graphics: 8086tiny.c bios.bin tinyxms.sys
 	${CC} 8086tiny.c ${OPTS_NOGFX} ${OPTS_ALL} -o 8086tiny
 	strip 8086tiny
 
 clean:
-	rm -f 8086tiny bios.bin bios.lst
+	rm -f 8086tiny bios.bin bios.lst tinyxms.sys tinyxms.lst

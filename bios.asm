@@ -2566,8 +2566,6 @@ int16:
 	mov	bx, [es:kbbuf_head-bios_data]
 	mov	dx, [es:bx]
 
-	sti
-
 	; Check if there is a key in the buffer. ZF is set if there is none.
 	cmp	cx, bx
 
@@ -2579,7 +2577,15 @@ int16:
 	pop	bx
 	pop	es
 
-	retf	2	; NEED TO FIX THIS!!
+	push bp
+	mov bp, sp
+	push ax
+	lahf
+	mov byte [bp + 6], ah
+	pop ax
+	pop bp
+	iret
+
 
     kb_shiftflags:
 

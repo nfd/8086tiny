@@ -57,7 +57,7 @@ main:
 ; These values (BIOS ID string, BIOS date and so forth) go at the very top of memory
 
 biosstr	db	'8086tiny BIOS Revision 1.61!', 0, 0		; Why not?
-mem_top	db	0xea, 0, 0x01, 0, 0xf0, '03/08/14', 0, 0xfe, 0
+
 
 bios_entry:
 
@@ -240,15 +240,6 @@ boot:	mov	ax, 0
 	mov	word [es:4*0x41], cx
 	mov	cx, 0xf000
 	mov	word [es:4*0x41 + 2], cx
-
-; Set up last 16 bytes of memory, including boot jump, BIOS date, machine ID byte
-
-	mov	ax, 0xffff
-	mov	es, ax
-	mov	di, 0
-	mov	si, mem_top
-	mov	cx, 16
-	rep	movsb
 
 ; Set up the BIOS data area
 
@@ -3847,3 +3838,10 @@ tm_wday		equ $+24
 tm_yday		equ $+28
 tm_dst		equ $+32
 tm_msec		equ $+36
+
+
+	times 0FEF0h - ($ - $$) db 0
+
+mem_top:
+	jmp 0F000h:100h
+	db '03/08/14', 0, 0xfe, 0

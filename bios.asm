@@ -2013,14 +2013,22 @@ cpu	8086
 
 ; ************************* INT 11h - get equipment list
 
-int11:	
-	mov	ax, [cs:equip]
+int11:
+	push ds
+	mov ax, 40h
+	mov ds, ax
+	mov ax, [equip - bios_data]		; 640K conventional memory
+	pop ds
 	iret
 
 ; ************************* INT 12h - return memory size
 
-int12:	
-	mov	ax, 0x280 ; 640K conventional memory
+int12:
+	push ds
+	mov ax, 40h
+	mov ds, ax
+	mov ax, [memsize - bios_data]
+	pop ds
 	iret
 
 ; ************************* INT 13h handler - disk services
@@ -3608,7 +3616,7 @@ lpt4addr	dw	0
 equip		dw	0b0000000000100001
 ;equip		dw	0b0000000100100001
 		db	0
-memsize		dw	0x280
+memsize		dw	640		; 640 KiB conventional memory
 		db	0
 		db	0
 keyflags1	db	0

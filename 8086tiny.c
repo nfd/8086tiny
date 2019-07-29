@@ -164,7 +164,7 @@
 unsigned char mem[RAM_SIZE], io_ports[IO_PORT_COUNT], *opcode_stream, *regs8, i_rm, i_w, i_reg, i_mod, i_mod_size, i_d, i_reg4bit, raw_opcode_id, xlat_opcode_id, extra, rep_mode, seg_override_en, rep_override_en, trap_flag, int8_asap, scratch_uchar, io_hi_lo, *vid_mem_base, spkr_en, bios_table_lookup[20][256];
 unsigned short *regs16, reg_ip, seg_override, file_index, wave_counter;
 unsigned int op_source, op_dest, rm_addr, op_to_addr, op_from_addr, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, inst_counter, set_flags_type, GRAPHICS_X, GRAPHICS_Y, pixel_colors[16], vmem_ctr;
-int op_result, disk[3], scratch_int, hlt_this_time;
+int op_result, disk[3], scratch_int, hlt_this_time, setting_ss, prior_setting_ss;
 time_t clock_buf;
 struct timeb ms_clock;
 
@@ -304,6 +304,8 @@ int main(int argc, char **argv)
 	// Instruction execution loop. Terminates if CS:IP = 0:0
 	for (; opcode_stream = mem + 16 * regs16[REG_CS] + reg_ip, opcode_stream != mem;)
 	{
+		setting_ss = 0;
+
 		// Set up variables to prepare for decoding an opcode
 		set_opcode(*opcode_stream);
 
@@ -437,12 +439,14 @@ int main(int argc, char **argv)
 						OP(=);
 				}
 			OPCODE 10: // MOV sreg, r/m | POP r/m | LEA reg, r/m
-				if (!i_w) // MOV
+				if (!i_w) { // MOV
 					i_w = 1,
 					i_reg += 8,
 					DECODE_RM_REG,
 					OP(=);
-				else if (!i_d) // LEA
+					if (op_to_addr == REGS_BASE + 2 * REG_SS)
+						setting_ss = 1;
+				} else if (!i_d) // LEA
 					seg_override_en = 1,
 					seg_override = REG_ZERO,
 					DECODE_RM_REG,
@@ -605,7 +609,9 @@ int main(int argc, char **argv)
 			OPCODE 25: // PUSH reg
 				R_M_PUSH(regs16[extra])
 			OPCODE 26: // POP reg
-				R_M_POP(regs16[extra])
+				R_M_POP(regs16[extra]);
+				if ((void*)&regs16[extra] == (void*)&mem[REGS_BASE + 2 * REG_SS])
+					setting_ss = 1;
 			OPCODE 27: // xS: segment overrides
 				seg_override_en = 2;
 				seg_override = extra;
@@ -706,13 +712,17 @@ int main(int argc, char **argv)
 				set_CF(0), set_OF(0);
 		}
 
+		if (prior_setting_ss)
+			setting_ss = 0;
+		prior_setting_ss = setting_ss;
+
 		// Poll timer/keyboard every KEYBOARD_TIMER_UPDATE_DELAY instructions
-		if (!(++inst_counter % KEYBOARD_TIMER_UPDATE_DELAY))
+		if (!setting_ss && !(++inst_counter % KEYBOARD_TIMER_UPDATE_DELAY))
 			int8_asap = 1, hlt_this_time = 0;
 
 #ifndef NO_GRAPHICS
 		// Update the video graphics display every GRAPHICS_UPDATE_DELAY instructions
-		if (!(inst_counter % GRAPHICS_UPDATE_DELAY))
+		if (!setting_ss && !(inst_counter % GRAPHICS_UPDATE_DELAY))
 		{
 			hlt_this_time = 0;
 			// Video card in graphics mode?
@@ -759,14 +769,14 @@ int main(int argc, char **argv)
 		}
 
 		// Application has set trap flag, so fire INT 1
-		if (trap_flag)
+		if (!setting_ss && trap_flag)
 			pc_interrupt(1);
 
 		trap_flag = regs8[FLAG_TF];
 
 		// If a timer tick is pending, interrupts are enabled, and no overrides/REP are active,
 		// then process the tick and check for new keystrokes
-		if (int8_asap && !seg_override_en && !rep_override_en && regs8[FLAG_IF] && !regs8[FLAG_TF])
+		if (!setting_ss && int8_asap && !seg_override_en && !rep_override_en && regs8[FLAG_IF] && !regs8[FLAG_TF])
 			pc_interrupt(0xA), int8_asap = 0, SDL_KEYBOARD_DRIVER;
 	}
 

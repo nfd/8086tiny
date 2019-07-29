@@ -1,7 +1,7 @@
 ; BIOS source for 8086tiny IBM PC emulator (revision 1.21 and above). Compiles with NASM.
 ; Copyright 2013-14, Adrian Cable (adrian.cable@gmail.com) - http://www.megalith.co.uk/8086tiny
 ;
-; Revision 1.61
+; Revision 1.62
 ;
 ; This work is licensed under the MIT License. See included LICENSE.TXT.
 
@@ -29,7 +29,7 @@
 	org	100h			; BIOS loads at offset 0x0100
 
 main:
-	jmp	bios_entry
+	jmp	strict short bios_entry
 
 ; Here go pointers to the different data tables used for instruction decoding
 
@@ -54,9 +54,8 @@ main:
 	dw	jxx_dec_d	; Table 18: Jxx decode table D
 	dw	flags_mult	; Table 19: FLAGS multipliers
 
-; These values (BIOS ID string, BIOS date and so forth) go at the very top of memory
 
-biosstr	db	'8086tiny BIOS Revision 1.61!', 0, 0		; Why not?
+biosstr	db	'8086tiny BIOS Revision 1.62!', 0, 0
 
 
 bios_entry:
@@ -232,8 +231,8 @@ boot:
 
 	mov	di, 0
 	mov	si, int_table
-	mov	cx, [itbl_size]
-	rep	movsb
+	mov	cx, itbl_size / 2
+	rep	movsw
 
 ; Set pointer to INT 41 table for hard disk
 
@@ -2834,6 +2833,7 @@ int41_max_sect	db 0
 
 ; ************************* ROM configuration table
 
+	align 2
 rom_config	dw 16		; 16 bytes following
 		db 0xfe		; Model
 		db 'A'		; Submodel
@@ -2847,6 +2847,7 @@ rom_config	dw 16		; 16 bytes following
 
 ; Internal state variables
 
+	align 2
 num_disks	dw 0	; Number of disks present
 hd_secs_hi	dw 0	; Total sectors on HD (high word)
 hd_secs_lo	dw 0	; Total sectors on HD (low word)
@@ -3668,6 +3669,7 @@ ansi_hide_cursor:
 
 ; Standard PC-compatible BIOS data area - to copy to 40:0
 
+		align 16
 bios_data:
 
 com1addr	dw	0
@@ -3770,6 +3772,7 @@ a2shift_tbl     db	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 ; Interrupt vector table - to copy to 0:0
 
+		align 4
 int_table	dw int0
           	dw 0xf000
           	dw int1
@@ -3832,7 +3835,8 @@ int_table	dw int0
           	dw 0xf000
           	dw int1e
 
-itbl_size	dw $-int_table
+itbl_size equ $-int_table
+
 
 ; Conversion from CGA video memory colours to ANSI colours
 
@@ -3868,6 +3872,7 @@ last_key_sdl	db 	0
 
 ; Now follow the tables for instruction decode helping
 
+		align 8
 ; R/M mode tables
 
 rm_mode0_reg1	db	3, 3, 5, 5, 6, 7, 12, 3
@@ -3881,6 +3886,7 @@ rm_mode12_dfseg	db	11, 11, 10, 10, 11, 11, 10, 11
 
 ; Opcode decode tables
 
+		align 16
 xlat_ids	db	9, 9, 9, 9, 7, 7, 25, 26, 9, 9, 9, 9, 7, 7, 25, 48, 9, 9, 9, 9, 7, 7, 25, 26, 9, 9, 9, 9, 7, 7, 25, 26, 9, 9, 9, 9, 7, 7, 27, 28, 9, 9, 9, 9, 7, 7, 27, 28, 9, 9, 9, 9, 7, 7, 27, 29, 9, 9, 9, 9, 7, 7, 27, 29, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 51, 54, 52, 52, 52, 52, 52, 52, 55, 55, 55, 55, 52, 52, 52, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8, 15, 15, 24, 24, 9, 9, 9, 9, 10, 10, 10, 10, 16, 16, 16, 16, 16, 16, 16, 16, 30, 31, 32, 53, 33, 34, 35, 36, 11, 11, 11, 11, 17, 17, 18, 18, 47, 47, 17, 17, 17, 17, 18, 18, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 12, 12, 19, 19, 37, 37, 20, 20, 49, 50, 19, 19, 38, 39, 40, 19, 12, 12, 12, 12, 41, 42, 43, 44, 53, 53, 53, 53, 53, 53, 53, 53, 13, 13, 13, 13, 21, 21, 22, 22, 14, 14, 14, 14, 21, 21, 22, 22, 53, 0, 23, 23, 54, 45, 6, 6, 46, 46, 46, 46, 46, 46, 5, 5
 ex_data  	db	0, 0, 0, 0, 0, 0, 8, 8, 1, 1, 1, 1, 1, 1, 9, 36, 2, 2, 2, 2, 2, 2, 10, 10, 3, 3, 3, 3, 3, 3, 11, 11, 4, 4, 4, 4, 4, 4, 8, 0, 5, 5, 5, 5, 5, 5, 9, 1, 6, 6, 6, 6, 6, 6, 10, 2, 7, 7, 7, 7, 7, 7, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 21, 21, 21, 21, 21, 21, 0, 0, 0, 0, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8, 12, 12, 12, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 16, 22, 0, 0, 0, 0, 1, 1, 0, 255, 48, 2, 0, 0, 0, 0, 255, 255, 40, 11, 3, 3, 3, 3, 3, 3, 3, 3, 43, 43, 43, 43, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 21, 0, 0, 2, 40, 21, 21, 80, 81, 92, 93, 94, 95, 0, 0
 std_flags	db	3, 3, 3, 3, 3, 3, 0, 0, 5, 5, 5, 5, 5, 5, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 5, 5, 5, 5, 5, 5, 0, 1, 3, 3, 3, 3, 3, 3, 0, 1, 5, 5, 5, 5, 5, 5, 0, 1, 3, 3, 3, 3, 3, 3, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -3899,6 +3905,7 @@ parity		db	1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 
 
 ; This is the format of the 36-byte tm structure, returned by the emulator's RTC query call
 
+		align 16
 timetable:
 
 tm_sec		equ $

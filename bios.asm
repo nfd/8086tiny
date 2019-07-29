@@ -2521,20 +2521,24 @@ int16:
 	mov	bx, 0x40
 	mov	es, bx
 
-    kb_gkblock:
-
+.retry:
 	cli
 
 	mov	cx, [es:kbbuf_tail-bios_data]
 	mov	bx, [es:kbbuf_head-bios_data]
 	mov	dx, [es:bx]
 
-	sti
-
 	; Wait until there is a key in the buffer
 	cmp	cx, bx
-	je	kb_gkblock
+	jne	.got
 
+	; Idle while waiting. HLT sleeps if no interrupt occurs.
+	sti
+	hlt
+	jmp	.retry
+
+
+.got:
 	add	word [es:kbbuf_head-bios_data], 2
 	call	kb_adjust_buf
 

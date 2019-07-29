@@ -162,9 +162,9 @@
 
 // Global variable definitions
 unsigned char mem[RAM_SIZE], io_ports[IO_PORT_COUNT], *opcode_stream, *regs8, i_rm, i_w, i_reg, i_mod, i_mod_size, i_d, i_reg4bit, raw_opcode_id, xlat_opcode_id, extra, rep_mode, seg_override_en, rep_override_en, trap_flag, int8_asap, scratch_uchar, io_hi_lo, *vid_mem_base, spkr_en, bios_table_lookup[20][256];
-unsigned short *regs16, reg_ip, seg_override, file_index, wave_counter;
+unsigned short *regs16, reg_ip, seg_override, file_index, wave_counter, reg_ip_before_rep_trace;
 unsigned int op_source, op_dest, rm_addr, op_to_addr, op_from_addr, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, inst_counter, set_flags_type, GRAPHICS_X, GRAPHICS_Y, pixel_colors[16], vmem_ctr;
-int op_result, disk[3], scratch_int, hlt_this_time, setting_ss, prior_setting_ss;
+int op_result, disk[3], scratch_int, hlt_this_time, setting_ss, prior_setting_ss, reset_ip_after_rep_trace;
 time_t clock_buf;
 struct timeb ms_clock;
 
@@ -294,7 +294,7 @@ int main(int argc, char **argv)
 	CAST(unsigned)regs16[REG_AX] = *disk ? lseek(*disk, 0, 2) >> 9 : 0;
 
 	// Load BIOS image into F000:0100, and set IP to 0100
-	read(disk[2], regs8 + (reg_ip = 0x100), 0xFF00);
+	read(disk[2], regs8 + (reg_ip = reg_ip_before_rep_trace = 0x100), 0xFF00);
 
 	// Load instruction decoding helper table
 	for (int i = 0; i < 20; i++)
@@ -547,28 +547,46 @@ int main(int argc, char **argv)
 			OPCODE 17: // MOVSx (extra=0)|STOSx (extra=1)|LODSx (extra=2)
 				scratch2_uint = seg_override_en ? seg_override : REG_DS;
 
-				for (scratch_uint = rep_override_en ? regs16[REG_CX] : 1; scratch_uint; scratch_uint--)
+				scratch_uint = rep_override_en ? regs16[REG_CX] : 1;
+				if (trap_flag && scratch_uint > 1) {
+					reset_ip_after_rep_trace = 1;
+					scratch_uint = 1;
+				}
+				for (; scratch_uint; scratch_uint--)
 				{
 					MEM_OP(extra < 2 ? SEGREG(REG_ES, REG_DI,) : REGS_BASE, =, extra & 1 ? REGS_BASE : SEGREG(scratch2_uint, REG_SI,)),
 					extra & 1 || INDEX_INC(REG_SI),
 					extra & 2 || INDEX_INC(REG_DI);
 					rep_override_en && regs16[REG_CX]--;
 				}
+				rep_override_en = seg_override_en = 0;
 			OPCODE 18: // CMPSx (extra=0)|SCASx (extra=1)
 				scratch2_uint = seg_override_en ? seg_override : REG_DS;
 
-				if ((scratch_uint = rep_override_en ? regs16[REG_CX] : 1))
+				scratch_uint = rep_override_en ? regs16[REG_CX] : 1;
+				if (trap_flag && scratch_uint > 1) {
+					reset_ip_after_rep_trace = 1;
+					scratch_uint = 1;
+				}
+				if (scratch_uint)
 				{
 					for (; scratch_uint; rep_override_en || scratch_uint--)
 					{
-						MEM_OP(extra ? REGS_BASE : SEGREG(scratch2_uint, REG_SI,), -, SEGREG(REG_ES, REG_DI,)),
-						extra || INDEX_INC(REG_SI),
-						INDEX_INC(REG_DI),
-						rep_override_en && !(--regs16[REG_CX] && (!op_result == rep_mode)) && (scratch_uint = 0);
+						MEM_OP(extra ? REGS_BASE : SEGREG(scratch2_uint, REG_SI,), -, SEGREG(REG_ES, REG_DI,));
+						extra || INDEX_INC(REG_SI);
+						INDEX_INC(REG_DI);
+						if (rep_override_en) {
+						  if (!(--regs16[REG_CX] && (!op_result == rep_mode))) {
+						    (scratch_uint = 0, reset_ip_after_rep_trace = 0);
+						  } else if (trap_flag) {
+						    scratch_uint = 0;
+						  }
+						}
 					}
 
 					set_flags_type = FLAGS_UPDATE_SZP | FLAGS_UPDATE_AO_ARITH; // Funge to set SZP/AO flags
 					set_CF(op_result > op_dest);
+					rep_override_en = seg_override_en = 0;
 				}
 			OPCODE 19: // RET|RETF|IRET
 				i_d = i_w;
@@ -697,6 +715,11 @@ int main(int argc, char **argv)
 		// help us here.
 		reg_ip += (i_mod*(i_mod != 3) + 2*(!i_mod && i_rm == 6))*i_mod_size + bios_table_lookup[TABLE_BASE_INST_SIZE][raw_opcode_id] + bios_table_lookup[TABLE_I_W_SIZE][raw_opcode_id]*(i_w + 1);
 
+		if (reset_ip_after_rep_trace) {
+			reg_ip = reg_ip_before_rep_trace;
+			reset_ip_after_rep_trace = 0;
+		}
+
 		// If instruction needs to update SF, ZF and PF, set them as appropriate
 		if (set_flags_type & FLAGS_UPDATE_SZP)
 		{
@@ -767,16 +790,20 @@ int main(int argc, char **argv)
 			hlt_this_time = 0;
 		}
 
-		// Application has set trap flag, so fire INT 1
-		if (!setting_ss && trap_flag)
-			pc_interrupt(1);
+		if (!seg_override_en && !rep_override_en) {
+			reg_ip_before_rep_trace = reg_ip;
 
-		trap_flag = regs8[FLAG_TF];
+			// Application has set trap flag, so fire INT 1
+			if (!setting_ss && trap_flag)
+				pc_interrupt(1);
 
-		// If a timer tick is pending, interrupts are enabled, and no overrides/REP are active,
-		// then process the tick and check for new keystrokes
-		if (!setting_ss && int8_asap && !seg_override_en && !rep_override_en && regs8[FLAG_IF] && !regs8[FLAG_TF])
-			pc_interrupt(0xA), int8_asap = 0, SDL_KEYBOARD_DRIVER;
+			trap_flag = regs8[FLAG_TF];
+
+			// If a timer tick is pending, interrupts are enabled, and no overrides/REP are active,
+			// then process the tick and check for new keystrokes
+			if (!setting_ss && int8_asap && regs8[FLAG_IF] && !regs8[FLAG_TF])
+				pc_interrupt(0xA), int8_asap = 0, SDL_KEYBOARD_DRIVER;
+		}
 	}
 
 #ifndef NO_GRAPHICS

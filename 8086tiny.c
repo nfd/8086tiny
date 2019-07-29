@@ -11,6 +11,7 @@
 #include <time.h>
 #include <sys/timeb.h>
 #include <memory.h>
+#include <stdint.h>
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -124,6 +125,8 @@
 // Execute arithmetic/logic operations in emulator memory/registers
 #define R_M_OP(dest,op,src) (i_w ? op_dest = CAST(unsigned short)dest, op_result = CAST(unsigned short)dest op (op_source = CAST(unsigned short)src) \
 								 : (op_dest = dest, op_result = dest op (op_source = CAST(unsigned char)src)))
+#define R_M_OP_64_EQUALS(dest,op,src) (i_w ? op_dest = CAST(unsigned short)dest, op_result = CAST(unsigned short)dest = (uint64_t)CAST(unsigned short)dest op (uint64_t)(op_source = CAST(unsigned short)src) \
+								 : (op_dest = dest, op_result = dest = (uint64_t)dest op (uint64_t)(op_source = CAST(unsigned char)src)))
 #define MEM_OP(dest,op,src) R_M_OP(mem[dest],op,mem[src])
 #define OP(op) MEM_OP(op_to_addr,op,op_from_addr)
 
@@ -455,10 +458,10 @@ int main(int argc, char **argv)
 				scratch2_uint = SIGN_OF(mem[rm_addr]),
 				scratch_uint = extra ? // xxx reg/mem, imm
 					++reg_ip,
-					(char)i_data1
+					/* 31 & */ (unsigned char)i_data1
 				: // xxx reg/mem, CL
 					i_d
-						? 31 & regs8[REG_CL]
+						? /* 31 & */ regs8[REG_CL]
 				: // xxx reg/mem, 1
 					1;
 				if (scratch_uint)
@@ -467,9 +470,9 @@ int main(int argc, char **argv)
 						scratch_uint %= i_reg / 2 + TOP_BIT,
 						R_M_OP(scratch2_uint, =, mem[rm_addr]);
 					if (i_reg & 1) // Rotate/shift right operations
-						R_M_OP(mem[rm_addr], >>=, scratch_uint);
+						R_M_OP_64_EQUALS(mem[rm_addr], >>, scratch_uint);
 					else // Rotate/shift left operations
-						R_M_OP(mem[rm_addr], <<=, scratch_uint);
+						R_M_OP_64_EQUALS(mem[rm_addr], <<, scratch_uint);
 					if (i_reg > 3) // Shift operations
 						set_opcode(0x10); // Decode like ADC
 					if (i_reg > 4) // SHR or SAR
@@ -479,17 +482,17 @@ int main(int argc, char **argv)
 				switch (i_reg)
 				{
 					OPCODE_CHAIN 0: // ROL
-						R_M_OP(mem[rm_addr], += , scratch2_uint >> (TOP_BIT - scratch_uint));
+						R_M_OP_64_EQUALS(mem[rm_addr], + , scratch2_uint >> (TOP_BIT - scratch_uint));
 						set_OF(SIGN_OF(op_result) ^ set_CF(op_result & 1))
 					OPCODE 1: // ROR
 						scratch2_uint &= (1 << scratch_uint) - 1,
-						R_M_OP(mem[rm_addr], += , scratch2_uint << (TOP_BIT - scratch_uint));
+						R_M_OP_64_EQUALS(mem[rm_addr], + , scratch2_uint << (TOP_BIT - scratch_uint));
 						set_OF(SIGN_OF(op_result * 2) ^ set_CF(SIGN_OF(op_result)))
 					OPCODE 2: // RCL
-						R_M_OP(mem[rm_addr], += (regs8[FLAG_CF] << (scratch_uint - 1)) + , scratch2_uint >> (1 + TOP_BIT - scratch_uint));
+						R_M_OP_64_EQUALS(mem[rm_addr], + (regs8[FLAG_CF] << (scratch_uint - 1)) + , scratch2_uint >> (1 + TOP_BIT - scratch_uint));
 						set_OF(SIGN_OF(op_result) ^ set_CF(scratch2_uint & 1 << (TOP_BIT - scratch_uint)))
 					OPCODE 3: // RCR
-						R_M_OP(mem[rm_addr], += (regs8[FLAG_CF] << (TOP_BIT - scratch_uint)) + , scratch2_uint << (1 + TOP_BIT - scratch_uint));
+						R_M_OP_64_EQUALS(mem[rm_addr], + (regs8[FLAG_CF] << (TOP_BIT - scratch_uint)) + , scratch2_uint << (1 + TOP_BIT - scratch_uint));
 						set_CF(scratch2_uint & 1 << (scratch_uint - 1));
 						set_OF(SIGN_OF(op_result) ^ SIGN_OF(op_result * 2))
 					OPCODE 4: // SHL
@@ -499,7 +502,7 @@ int main(int argc, char **argv)
 					OPCODE 7: // SAR
 						scratch_uint < TOP_BIT || set_CF(scratch2_uint);
 						set_OF(0);
-						R_M_OP(mem[rm_addr], +=, scratch2_uint *= ~(((1 << TOP_BIT) - 1) >> scratch_uint));
+						R_M_OP_64_EQUALS(mem[rm_addr], +, scratch2_uint *= ~(((1 << TOP_BIT) - 1) >> scratch_uint));
 				}
 			OPCODE 13: // LOOPxx|JCZX
 				scratch_uint = !!--regs16[REG_CX];

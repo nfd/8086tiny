@@ -242,6 +242,7 @@ char pc_interrupt(unsigned char interrupt_num)
 	MEM_OP(REGS_BASE + 2 * REG_CS, =, 4 * interrupt_num + 2);
 	R_M_OP(reg_ip, =, mem[4 * interrupt_num]);
 
+	trap_flag = 0;
 	return regs8[FLAG_TF] = regs8[FLAG_IF] = 0;
 }
 

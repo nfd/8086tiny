@@ -161,10 +161,14 @@
 #endif
 
 // Global variable definitions
-unsigned char mem[RAM_SIZE], io_ports[IO_PORT_COUNT], *opcode_stream, *regs8, i_rm, i_w, i_reg, i_mod, i_mod_size, i_d, i_reg4bit, raw_opcode_id, xlat_opcode_id, extra, rep_mode, seg_override_en, rep_override_en, trap_flag, int8_asap, scratch_uchar, io_hi_lo, *vid_mem_base, spkr_en, bios_table_lookup[20][256];
+unsigned char mem[RAM_SIZE], io_ports[IO_PORT_COUNT],
+	*opcode_stream, *regs8, i_rm, i_w, i_reg, i_mod, i_mod_size, i_d, i_reg4bit,
+	raw_opcode_id, xlat_opcode_id, extra, rep_mode, seg_override_en, rep_override_en,
+	trap_flag, int8_asap, scratch_uchar, io_hi_lo, *vid_mem_base, spkr_en, bios_table_lookup[20][256],
+	hlt_this_time, setting_ss, prior_setting_ss, reset_ip_after_rep_trace;
 unsigned short *regs16, reg_ip, seg_override, file_index, wave_counter, reg_ip_before_rep_trace;
 unsigned int op_source, op_dest, rm_addr, op_to_addr, op_from_addr, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, inst_counter, set_flags_type, GRAPHICS_X, GRAPHICS_Y, pixel_colors[16], vmem_ctr;
-int op_result, disk[3], scratch_int, hlt_this_time, setting_ss, prior_setting_ss, reset_ip_after_rep_trace;
+int op_result, disk[3], scratch_int;
 time_t clock_buf;
 struct timeb ms_clock;
 

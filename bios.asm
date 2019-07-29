@@ -3224,31 +3224,28 @@ io_key_available:
 	int	9
 	ret
 
-; Reaches up into the stack before the end of an interrupt handler, and sets the carry flag
-
-reach_stack_stc:
-
-	xchg	bp, sp
-	or	word [bp+4], 1
-	xchg	bp, sp
-	iret
 
 ; Reaches up into the stack before the end of an interrupt handler, and clears the carry flag
-
 reach_stack_clc:
+	db 0A8h			; test al, imm8 (NC, skip stc)
 
-	xchg	bp, sp
-	and	word [bp+4], 0xfffe
-	xchg	bp, sp
-	iret
+; Reaches up into the stack before the end of an interrupt handler, and sets the carry flag
+reach_stack_stc:
+	stc
 
 ; Reaches up into the stack before the end of an interrupt handler, and returns with the current
 ; setting of the carry flag
 
 reach_stack_carry:
+	push bp
+	mov bp, sp
+	pushf
+	ror byte [bp + 6], 1
+	popf
+	rcl byte [bp + 6], 1
+	pop bp
+	iret
 
-	jc	reach_stack_stc
-	jmp	reach_stack_clc
 
 ; This is the VMEM driver, to support direct video memory access in 80x25 colour CGA mode.
 ; It scans through CGA video memory at address B800:0, and if there is anything there (i.e.

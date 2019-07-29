@@ -5,8 +5,6 @@
 ;
 ; This work is licensed under the MIT License. See included LICENSE.TXT.
 
-	cpu	8086
-
 ; Here we define macros for some custom instructions that help the emulator talk with the outside
 ; world. They are described in detail in the hint.html file, which forms part of the emulator
 ; distribution.
@@ -27,10 +25,10 @@
 	db	0x0f, 0x03
 %endmacro
 
-org	100h				; BIOS loads at offset 0x0100
+	cpu	8086
+	org	100h			; BIOS loads at offset 0x0100
 
 main:
-
 	jmp	bios_entry
 
 ; Here go pointers to the different data tables used for instruction decoding

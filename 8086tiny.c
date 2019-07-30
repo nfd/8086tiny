@@ -12,6 +12,21 @@
 #include <sys/timeb.h>
 #include <memory.h>
 #include <stdint.h>
+#include <stdlib.h>
+
+#define AMOUNT_XMS_HANDLES 32
+#define XMS_REPORTED_FREE (16 * 1024 * 1024)
+// #define XMS_DEBUG 1
+#define XMS_FAIL_FIRST_ALLOC 1
+/* FreeCOM with XMS Swap seems to break when it loads
+ * into our XMS. Various errors occur with different versions.
+ * As a workaround, this fails FreeCOM's XMS allocation.
+ * After that, for example, lDebug symbolic can use XMS.
+ */
+
+#ifdef XMS_DEBUG
+#include <stdio.h>
+#endif
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -181,6 +196,8 @@ unsigned short vid_addr_lookup[VIDEO_RAM_SIZE], cga_colors[4] = {0 /* Black */, 
 
 // Helper functions
 
+void callxms();
+
 // Set carry flag
 char set_CF(int new_CF)
 {
@@ -308,6 +325,16 @@ int main(int argc, char **argv)
 	// Instruction execution loop. Terminates if CS:IP = 0:0
 	for (; opcode_stream = mem + 16 * regs16[REG_CS] + reg_ip, opcode_stream != mem;)
 	{
+#ifdef XMS_DEBUG
+	if (opcode_stream[0] == 0xEB &&
+		opcode_stream[1] == 0x3 &&
+		opcode_stream[2] == 0x90 &&
+		opcode_stream[3] == 0x90 &&
+		opcode_stream[4] == 0x90) {
+		printf("xms call ax=%04Xh dx=%04Xh bx=%04Xh\r\n",
+			regs16[REG_AX], regs16[REG_DX], regs16[REG_BX]);
+	}
+#endif
 		setting_ss = 0;
 
 		// Set up variables to prepare for decoding an opcode
@@ -708,6 +735,8 @@ int main(int argc, char **argv)
 						regs8[REG_AL] = ~lseek(disk[regs8[REG_DL]], CAST(unsigned)regs16[REG_BP] << 9, 0)
 							? ((char)i_data0 == 3 ? (int(*)())write : (int(*)())read)(disk[regs8[REG_DL]], mem + SEGREG(REG_ES, REG_BX,), regs16[REG_AX])
 							: 0;
+					OPCODE 4:	// XMS
+						callxms();
 				}
 			OPCODE 54: // HLT
 				hlt_this_time = 1;
@@ -816,4 +845,241 @@ int main(int argc, char **argv)
 	SDL_Quit();
 #endif
 	return 0;
+}
+
+
+struct xmshandle {
+	void * allocation;
+	uint32_t size;
+	uint32_t lockcount;
+};
+#pragma pack(push, 1)
+struct __attribute__((__packed__)) xmsmove {
+        uint32_t count;
+        uint16_t sourcehandle;
+        union {
+                uint32_t sourceaddress;
+                struct {
+                        uint16_t sourceoffset;
+                        uint16_t sourcesegment;
+                };
+        };
+        uint16_t desthandle;
+        union {
+                uint32_t destaddress;
+                struct {
+                        uint16_t destoffset;
+                        uint16_t destsegment;
+                };
+        };
+};
+#pragma pack(pop)
+
+
+struct xmshandle xmshandles[AMOUNT_XMS_HANDLES];
+
+uint8_t freexms(unsigned int ii, uint8_t force) {
+    	if (ii == 0 || ii > AMOUNT_XMS_HANDLES)
+    		return 0xA2;
+	if (xmshandles[ii - 1].allocation == NULL)
+		return 0xA2;
+	if (!force && xmshandles[ii - 1].lockcount != 0)
+		return 0xAB;
+	free(xmshandles[ii - 1].allocation);
+	xmshandles[ii - 1].allocation = NULL;
+	xmshandles[ii - 1].size = 0;
+	xmshandles[ii - 1].lockcount = 0;
+	return 0;
+}
+
+void returnxms(uint8_t bl) {
+	uint16_t ax = 1;
+	if (bl != 0)
+		ax = 0;
+	regs16[REG_AX] = ax;
+	regs8[REG_BL] = bl;
+}
+
+uint8_t checkhandle(uint16_t handle, uint8_t errorcode_handle) {
+	if (handle == 0 || handle > AMOUNT_XMS_HANDLES) {
+    		returnxms(errorcode_handle);
+		return 0;
+	}
+	if (xmshandles[handle - 1].allocation == NULL) {
+    		returnxms(errorcode_handle);
+		return 0;
+	}
+	return 1;
+}
+
+void * checkmoveaddress(
+	uint16_t handle, uint16_t segment, uint16_t offset,
+	uint32_t address, uint32_t count,
+	uint8_t errorcode_handle, uint8_t errorcode_address) {
+	void * pp;
+	if (handle) {
+		if (checkhandle(handle, errorcode_handle) == 0)
+			return NULL;
+		if (address + count
+			> xmshandles[handle - 1].size) {
+			returnxms(errorcode_address);
+			return NULL;
+		}
+		return xmshandles[handle - 1].allocation
+			+ address;
+	} else {
+		pp = mem + 16 * segment + (unsigned short)(offset);
+		if (pp + count
+			> (void*)mem + RAM_SIZE) {
+			returnxms(errorcode_address);
+			return NULL;
+		}
+		return pp;
+	}
+}
+
+
+void callxms() {
+  uint32_t ii;
+  uint64_t uu64;
+  void* pp;
+  if (regs8[FLAG_CF]) {		// CY, this is an XMS entrypoint call
+    set_CF(0);
+#ifdef XMS_DEBUG
+	printf("xms call ax=%04Xh dx=%04Xh bx=%04Xh\r\n",
+		regs16[REG_AX], regs16[REG_DX], regs16[REG_BX]);
+#endif
+    switch(regs8[REG_AH]) {
+    OPCODE_CHAIN 8:
+	uu64 = 0;
+	for (ii = 0; ii < AMOUNT_XMS_HANDLES; ++ii) {
+	  uu64 += xmshandles[ii].size;
+	}
+	uu64 += XMS_REPORTED_FREE;
+	uu64 >>= 10;		// rounding down
+	if (uu64 > 0xFFFF) {
+	  uu64 = 0xFFFF;	// maximum reportable
+	}
+	regs16[REG_DX] = uu64;
+	uu64 = XMS_REPORTED_FREE;
+	uu64 >>= 10;		// rounding down
+	regs16[REG_AX] = uu64;
+    OPCODE 9:
+#ifdef XMS_FAIL_FIRST_ALLOC
+	{
+		static int counter = 0;
+		counter++;
+		if (counter <= 1) {
+			set_CF(1); return;
+		}
+	}
+#endif
+	uu64 = regs16[REG_DX];
+	uu64 <<= 10;
+	for (ii = 0; ii < AMOUNT_XMS_HANDLES; ++ii)
+		if (xmshandles[ii].allocation == NULL)
+			break;
+	if (ii == AMOUNT_XMS_HANDLES) {
+		returnxms(0xA1);
+		break;
+	}
+	++ii;
+	pp = calloc(1, uu64);
+	if (!pp) {
+		returnxms(0xA0);
+		break;
+	}
+	xmshandles[ii - 1].allocation = pp;
+	xmshandles[ii - 1].size = uu64;
+	xmshandles[ii - 1].lockcount = 0;
+	regs16[REG_DX] = ii;
+	returnxms(0);
+    OPCODE 10:
+	returnxms(freexms(regs16[REG_DX], 0));
+    OPCODE 11: {
+	struct xmsmove *mm = (void*)mem + SEGREG(REG_DS, REG_SI,);
+	void* psource;
+	void* pdest;
+#ifdef XMS_DEBUG
+	printf("xmsmove count=%u sourcehandle=%u sourceaddress=%08Xh"
+		" desthandle=%u destaddress=%08Xh\r\n",
+		mm->count, mm->sourcehandle, mm->sourceaddress,
+		mm->desthandle, mm->destaddress);
+#endif
+	psource = checkmoveaddress(
+		mm->sourcehandle, mm->sourcesegment, mm->sourceoffset,
+		mm->sourceaddress, mm->count, 0xA3, 0xA4);
+	if (!psource)
+		break;
+	pdest = checkmoveaddress(
+		mm->desthandle, mm->destsegment, mm->destoffset,
+		mm->destaddress, mm->count, 0xA5, 0xA6);
+	if (!pdest)
+		break;
+#ifdef XMS_DEBUG
+	printf("xmsmove psource=%08Xh pdest=%08Xh mem=%08Xh\r\n",
+		psource, pdest, mem);
+#endif
+	memmove(pdest, psource, mm->count);
+	returnxms(0);
+	}
+    OPCODE 12:
+	if (checkhandle(regs16[REG_DX], 0xA2) == 0)
+		break;
+	returnxms(0xAD);
+    OPCODE 13:
+	if (checkhandle(regs16[REG_DX], 0xA2) == 0)
+		break;
+	returnxms(0xAA);
+    OPCODE 14:
+	if (checkhandle(regs16[REG_DX], 0xA2) == 0)
+		break;
+	for (ii = 0, uu64 = 0; ii < AMOUNT_XMS_HANDLES; ++ii)
+		if (xmshandles[ii].allocation == NULL)
+			++uu64;
+	regs16[REG_AX] = 1;
+	if (uu64 > 0xFF)
+		uu64 = 0xFF;
+	regs8[REG_BL] = uu64;
+	ii = xmshandles[regs16[REG_DX] - 1].lockcount;
+	if (ii > 0xFF)
+		ii = 0xFF;
+	regs8[REG_BH] = ii;
+	uu64 = xmshandles[regs16[REG_DX] - 1].size;
+	uu64 >>= 10;
+	if (uu64 > 0xFFFF)
+		uu64 = 0xFFFF;
+	regs16[REG_DX] = uu64;
+    OPCODE 15:
+	if (checkhandle(regs16[REG_DX], 0xA2) == 0)
+		break;
+	if (xmshandles[ii - 1].lockcount != 0) {
+		returnxms(0xAB);
+		break;
+	}
+	uu64 = regs16[REG_BX];
+	uu64 <<= 10;
+	pp = realloc(xmshandles[regs16[REG_DX] - 1].allocation, uu64);
+	if (!pp) {
+		returnxms(0xA0);
+		break;
+	}
+	xmshandles[regs16[REG_DX] - 1].allocation = pp;
+	ii = xmshandles[regs16[REG_DX] - 1].size;
+	if (ii < uu64) {
+		for (; ii < uu64; ++ii)
+			((uint8_t*)pp)[ii] = 0;
+	}
+	xmshandles[regs16[REG_DX] - 1].size = uu64;
+	returnxms(0);
+    }
+  } else {			// NC, this is a different dispatcher
+    switch(regs16[REG_AX]) {
+    OPCODE_CHAIN 0:
+      for (ii = 0; ii < AMOUNT_XMS_HANDLES; ++ii) {
+	freexms(ii + 1, 1);
+      }
+      regs16[REG_AX] = -1;
+    }
+  }
 }

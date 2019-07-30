@@ -949,19 +949,9 @@ void * checkmoveaddress(
 	}
 }
 
-
-void callxms() {
-  uint32_t ii, upper, lower;
-  uint64_t uu64;
-  void* pp;
-  if (regs8[FLAG_CF]) {		// CY, this is an XMS entrypoint call
-    set_CF(0);
-#ifdef XMS_DEBUG
-	printf("xms call ax=%04Xh dx=%04Xh bx=%04Xh\r\n",
-		regs16[REG_AX], regs16[REG_DX], regs16[REG_BX]);
-#endif
-    switch(regs8[REG_AH]) {
-    OPCODE_CHAIN 8:
+uint32_t getfreexms() {
+	uint32_t ii, upper, lower;
+	void* pp;
 	/* Now we use XMS_REPORTED_FREE as a maximum limit for
 	 * a binary search, which repeatedly tries to allocate
 	 * memory until it has found the maximum available.
@@ -987,17 +977,34 @@ void callxms() {
 		 * ii is set to more than lower
 		 */
 	}
+	return lower;
+}
+
+
+void callxms() {
+  uint32_t ii, free;
+  uint64_t uu64;
+  void* pp;
+  if (regs8[FLAG_CF]) {		// CY, this is an XMS entrypoint call
+    set_CF(0);
+#ifdef XMS_DEBUG
+	printf("xms call ax=%04Xh dx=%04Xh bx=%04Xh\r\n",
+		regs16[REG_AX], regs16[REG_DX], regs16[REG_BX]);
+#endif
+    switch(regs8[REG_AH]) {
+    OPCODE_CHAIN 8:
+	free = getfreexms();
 	uu64 = 0;
 	for (ii = 0; ii < AMOUNT_XMS_HANDLES; ++ii) {
 	  uu64 += xmshandles[ii].size;
 	}
-	uu64 += lower;
+	uu64 += free;
 	uu64 >>= 10;		// rounding down
 	if (uu64 > 0xFFFF) {
 	  uu64 = 0xFFFF;	// maximum reportable
 	}
 	regs16[REG_DX] = uu64;
-	uu64 = lower;
+	uu64 = free;
 	uu64 >>= 10;		// rounding down
 	regs16[REG_AX] = uu64;
 	regs8[REG_BL] = 0;

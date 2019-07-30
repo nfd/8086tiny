@@ -1072,6 +1072,10 @@ void callxms() {
 	}
 	xmshandles[regs16[REG_DX] - 1].size = uu64;
 	returnxms(0);
+	break;
+    default:
+	returnxms(0x80);	// function not implemented
+	break;
     }
   } else {			// NC, this is a different dispatcher
     switch(regs16[REG_AX]) {

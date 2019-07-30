@@ -738,7 +738,7 @@ int main(int argc, char **argv)
 					OPCODE 4:	// XMS
 						callxms();
 				}
-			OPCODE 54: // HLT
+			OPCODE 100: // HLT
 				hlt_this_time = 1;
 		}
 		if (xlat_opcode_id != 23 && xlat_opcode_id != 27) {

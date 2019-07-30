@@ -136,7 +136,7 @@
 										  out_regs[i_w + 1] = (op_result = CAST(op_data_type)mem[rm_addr] * (op_data_type)*out_regs) >> 16, \
 										  regs16[REG_AX] = op_result, \
 										  set_OF(set_CF(op_result - (op_data_type)op_result)))
-#define DIV_MACRO(out_data_type,in_data_type,out_regs) (scratch_int = CAST(out_data_type)mem[rm_addr]) && !(scratch2_uint = (in_data_type)(scratch_uint = (out_regs[i_w+1] << 16) + regs16[REG_AX]) / scratch_int, scratch2_uint - (out_data_type)scratch2_uint) ? out_regs[i_w+1] = scratch_uint - scratch_int * (*out_regs = scratch2_uint) : pc_interrupt(0)
+#define DIV_MACRO(out_data_type,in_data_type,out_regs) (scratch_int = CAST(out_data_type)mem[rm_addr]) && !(scratch2_uint = (in_data_type)(scratch_uint = (out_regs[i_w+1] << 16) + regs16[REG_AX]) / scratch_int, scratch2_uint - (out_data_type)scratch2_uint) ? out_regs[i_w+1] = scratch_uint - scratch_int * (*out_regs = scratch2_uint) : pc_interrupt_reset(0)
 #define DAA_DAS(op1,op2) \
 	set_AF((((scratch_uchar = regs8[REG_AL]) & 0x0F) > 9) || regs8[FLAG_AF]) && (op_result = (regs8[REG_AL] op1 6), set_CF(regs8[FLAG_CF] || (regs8[REG_AL] op2 scratch_uchar))), \
 	set_CF((regs8[REG_AL] > 0x9f) || regs8[FLAG_CF]) && (op_result = (regs8[REG_AL] op1 0x60))
@@ -273,6 +273,14 @@ char pc_interrupt(unsigned char interrupt_num)
 	trap_flag = 0;
 	return regs8[FLAG_TF] = regs8[FLAG_IF] = 0;
 }
+
+// Execute interrupt but reset ip
+char pc_interrupt_reset(unsigned char interrupt_num)
+{
+	reg_ip = reg_ip_before_rep_trace;
+	return pc_interrupt(interrupt_num);
+}
+
 
 // AAA and AAS instructions - which_operation is +1 for AAA, and -1 for AAS
 int AAA_AAS(char which_operation)
@@ -712,7 +720,7 @@ int main(int argc, char **argv)
 					regs8[REG_AH] = regs8[REG_AL] / i_data0,
 					op_result = regs8[REG_AL] %= i_data0;
 				else // Divide by zero
-					pc_interrupt(0)
+					pc_interrupt_reset(0)
 			OPCODE 42: // AAD
 				i_w = 0;
 				regs16[REG_AX] = op_result = 0xFF & regs8[REG_AL] + i_data0 * regs8[REG_AH]
@@ -746,7 +754,7 @@ int main(int argc, char **argv)
 				}
 				if ((uint8_t)i_data0 == 11	// ud2
 					|| (uint8_t)i_data0 >= 32)
-					pc_interrupt(6);
+					pc_interrupt_reset(6);
 			OPCODE 100: // HLT
 				hlt_this_time = 1;
 			OPCODE 101: // PUSH imm16
@@ -765,7 +773,7 @@ int main(int argc, char **argv)
 					opcode_stream[2],
 					opcode_stream[3]);
 #endif
-				pc_interrupt(6);
+				pc_interrupt_reset(6);
 		}
 		if (xlat_opcode_id != 23 && xlat_opcode_id != 27) {
 			rep_override_en = seg_override_en = 0;

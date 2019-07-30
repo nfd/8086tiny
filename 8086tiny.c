@@ -740,6 +740,11 @@ int main(int argc, char **argv)
 				}
 			OPCODE 100: // HLT
 				hlt_this_time = 1;
+			OPCODE 101: // PUSH imm16
+				R_M_PUSH(i_data0);
+			OPCODE 102: // PUSH imm8
+				scratch_uint = (int16_t)(int8_t)i_data0;
+				R_M_PUSH(scratch_uint);
 		}
 		if (xlat_opcode_id != 23 && xlat_opcode_id != 27) {
 			rep_override_en = seg_override_en = 0;

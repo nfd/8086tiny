@@ -17,11 +17,17 @@
 #define AMOUNT_XMS_HANDLES 32
 #define XMS_REPORTED_FREE (16 * 1024 * 1024)
 // #define XMS_DEBUG 1
-#define XMS_FAIL_FIRST_ALLOC 1
+// #define XMS_FAIL_FIRST_ALLOC 1
 /* FreeCOM with XMS Swap seems to break when it loads
  * into our XMS. Various errors occur with different versions.
  * As a workaround, this fails FreeCOM's XMS allocation.
  * After that, for example, lDebug symbolic can use XMS.
+ *
+ * Update: I found the FreeCOM bug and reported it at
+ * https://github.com/FDOS/freecom/issues/15
+ *
+ * With the support for the push imm16 instruction,
+ * we can work around the FreeCOM bug.
  */
 
 #ifdef XMS_DEBUG

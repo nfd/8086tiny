@@ -744,6 +744,9 @@ int main(int argc, char **argv)
 					OPCODE 4:	// XMS
 						callxms();
 				}
+				if ((uint8_t)i_data0 == 11	// ud2
+					|| (uint8_t)i_data0 >= 32)
+					pc_interrupt(6);
 			OPCODE 100: // HLT
 				hlt_this_time = 1;
 			OPCODE 101: // PUSH imm16
@@ -751,6 +754,18 @@ int main(int argc, char **argv)
 			OPCODE 102: // PUSH imm8
 				scratch_uint = (int16_t)(int8_t)i_data0;
 				R_M_PUSH(scratch_uint);
+			OPCODE 103: // FPU instructions - no ops
+				break;
+			default:
+#ifdef INT6_DEBUG
+				printf("Interrupt 6 at %04X:%04X = %02X %02X %02X %02X\r\n",
+					regs16[REG_CS], reg_ip,
+					opcode_stream[0],
+					opcode_stream[1],
+					opcode_stream[2],
+					opcode_stream[3]);
+#endif
+				pc_interrupt(6);
 		}
 		if (xlat_opcode_id != 23 && xlat_opcode_id != 27) {
 			rep_override_en = seg_override_en = 0;

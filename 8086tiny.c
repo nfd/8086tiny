@@ -1000,6 +1000,7 @@ void callxms() {
 	uu64 = lower;
 	uu64 >>= 10;		// rounding down
 	regs16[REG_AX] = uu64;
+	regs8[REG_BL] = 0;
     OPCODE 9:
 #ifdef XMS_FAIL_FIRST_ALLOC
 	{

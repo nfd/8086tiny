@@ -951,7 +951,7 @@ void * checkmoveaddress(
 
 
 void callxms() {
-  uint32_t ii;
+  uint32_t ii, upper, lower;
   uint64_t uu64;
   void* pp;
   if (regs8[FLAG_CF]) {		// CY, this is an XMS entrypoint call
@@ -962,17 +962,42 @@ void callxms() {
 #endif
     switch(regs8[REG_AH]) {
     OPCODE_CHAIN 8:
+	/* Now we use XMS_REPORTED_FREE as a maximum limit for
+	 * a binary search, which repeatedly tries to allocate
+	 * memory until it has found the maximum available.
+	 * That mmeans the reported value is no longer entirely
+	 * fabricated. However, it also avoids large allocations.
+	 */
+	upper = XMS_REPORTED_FREE;	// upper = upper limit, not yet tested
+	lower = 0;			// lower = lower limit, tested already
+	ii = upper;			// on first iteration, test upper
+	for (;;) {
+		pp = malloc(ii);	// check whether we can allocate
+		free(pp);		// immediately free the allocation
+		if (pp)			// pointer still non-NULL if was allocated
+			lower = ii;	// valid: is the new lower (tested)
+		else
+			upper = ii - 1;	// invalid: one less is the new upper (untested)
+		if (upper <= lower)	// hardened compare, upper == lower should suffice
+			break;		// binary search ended
+		ii = lower + (upper - lower + 1) / 2;
+		/* upper-lower is at least 1 (upper must be higher, else break)
+		 * upper-lower+1 is at least 2
+		 * /2 it is at least 1
+		 * ii is set to more than lower
+		 */
+	}
 	uu64 = 0;
 	for (ii = 0; ii < AMOUNT_XMS_HANDLES; ++ii) {
 	  uu64 += xmshandles[ii].size;
 	}
-	uu64 += XMS_REPORTED_FREE;
+	uu64 += lower;
 	uu64 >>= 10;		// rounding down
 	if (uu64 > 0xFFFF) {
 	  uu64 = 0xFFFF;	// maximum reportable
 	}
 	regs16[REG_DX] = uu64;
-	uu64 = XMS_REPORTED_FREE;
+	uu64 = lower;
 	uu64 >>= 10;		// rounding down
 	regs16[REG_AX] = uu64;
     OPCODE 9:

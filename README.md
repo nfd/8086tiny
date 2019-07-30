@@ -29,3 +29,33 @@ encouraged!
 
 Any questions, comments or suggestions are very welcome
 in our forum at 8086tiny.freeforums.net.
+
+
+ecm's fork
+==========
+
+In this fork, I implemented proper Trace Flag handling
+for debuggers, interrupt-lockout for mov or pop to ss,
+and idling with the HLT instruction. I also fixed the
+shift/rotate count handling so that the machine is
+always detected as an 8086, as most 186 instructions
+are still missing.
+
+Further, the BIOS's interrupt handlers were modified
+to be more compatible. Data has been aligned, and several
+corner cases are handled more properly. The two forms of
+186+ push instructions with immediates were implemented,
+which are used by FreeCOM (a bug).
+
+A DOS driver and coupled emulator interface add XMS 2.00
+handling to the machine, including HMA, UMB, and XMS
+extended memory. This driver is limited: A20 is always
+on, HMAMIN is assumed as zero, and XMS blocks cannot be
+locked. XMS memory can only be accessed by the driver.
+UMBs can only be allocated if the requested size
+exactly matches a block's full size (86-DOS systems
+compatible to MS-DOS 5 generally do it that way).
+Further, the UMB area is assumed by the DOS driver.
+(This is 128 KiB (2000h paragraphs) between segments
+D000h and EFFFh.) When the system is rebooted, the
+DOS driver's initialisation frees all prior allocations.

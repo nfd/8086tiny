@@ -763,8 +763,26 @@ int main(int argc, char **argv)
 				scratch_uint = (int16_t)(int8_t)i_data0;
 				R_M_PUSH(scratch_uint);
 			OPCODE 103: // FPU instructions - no ops
-				break;
-			default:
+			OPCODE 104: // PUSHA
+				scratch_uint = regs16[REG_SP];
+				R_M_PUSH(regs16[REG_AX]);
+				R_M_PUSH(regs16[REG_CX]);
+				R_M_PUSH(regs16[REG_DX]);
+				R_M_PUSH(regs16[REG_BX]);
+				R_M_PUSH(scratch_uint);
+				R_M_PUSH(regs16[REG_BP]);
+				R_M_PUSH(regs16[REG_SI]);
+				R_M_PUSH(regs16[REG_DI]);
+			OPCODE 105: // POPA
+				R_M_POP(regs16[REG_DI]);
+				R_M_POP(regs16[REG_SI]);
+				R_M_POP(regs16[REG_BP]);
+				R_M_POP(scratch_uint);
+				R_M_POP(regs16[REG_BX]);
+				R_M_POP(regs16[REG_DX]);
+				R_M_POP(regs16[REG_CX]);
+				R_M_POP(regs16[REG_AX]);
+			break; default:
 #ifdef INT6_DEBUG
 				printf("Interrupt 6 at %04X:%04X = %02X %02X %02X %02X\r\n",
 					regs16[REG_CS], reg_ip,

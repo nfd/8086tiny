@@ -3246,10 +3246,8 @@ reach_stack_stc:
 reach_stack_carry:
 	push bp
 	mov bp, sp
-	pushf
-	ror byte [bp + 6], 1
-	popf
-	rcl byte [bp + 6], 1
+	rcr byte [bp + 6], 1
+	rol byte [bp + 6], 1
 	pop bp
 	iret
 

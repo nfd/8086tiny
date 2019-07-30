@@ -85,10 +85,10 @@ xmsentry:
 	jb .disable		; local disable A20
 	je .success		; get A20 status (1 = enabled)
 	cmp ah, 10h
-	jb .call
-	je .requestumb
+	jb .call		; extended memory functions (call)
+	je .requestumb		; request UMB
 	cmp ah, 12h
-	jb .releaseumb
+	jb .releaseumb		; release UMB
 .invalid:
 	mov bl, 80h		; function not implemented
 	jmp .failure

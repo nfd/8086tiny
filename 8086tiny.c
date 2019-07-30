@@ -995,9 +995,10 @@ void callxms() {
     OPCODE_CHAIN 8:
 	free = getfreexms();
 	uu64 = 0;
-	for (ii = 0; ii < AMOUNT_XMS_HANDLES; ++ii) {
-	  uu64 += xmshandles[ii].size;
-	}
+	if (0)
+		for (ii = 0; ii < AMOUNT_XMS_HANDLES; ++ii) {
+		  uu64 += xmshandles[ii].size;
+		}
 	uu64 += free;
 	uu64 >>= 10;		// rounding down
 	if (uu64 > 0xFFFF) {
@@ -1128,6 +1129,20 @@ void callxms() {
 	freexms(ii + 1, 1);
       }
       regs16[REG_AX] = -1;
+    OPCODE 1:
+	free = getfreexms();
+	uu64 = 0;
+	if (1)
+		for (ii = 0; ii < AMOUNT_XMS_HANDLES; ++ii) {
+		  uu64 += xmshandles[ii].size;
+		}
+	uu64 += free;
+	uu64 >>= 10;		// rounding down
+	if (uu64 > 0xFFFF) {
+	  uu64 = 0xFFFF;	// maximum reportable
+	}
+	regs16[REG_AX] = uu64;
+	set_CF(1);
     }
   }
 }

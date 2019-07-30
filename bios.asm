@@ -2463,8 +2463,8 @@ int15:	; Here we do not support any of the functions, and just return
 	; je	int15_waitevent
 	; cmp	ah, 0x4f
 	; je	int15_intercept
-	; cmp	ah, 0x88
-	; je	int15_getextmem
+	cmp	ah, 0x88
+	je	int15_getextmem
 
 ; Otherwise, function not supported
 
@@ -2491,11 +2491,17 @@ int15:	; Here we do not support any of the functions, and just return
 ;
 ;	jmp	reach_stack_stc
 ;
-;  int15_getextmem: ; Extended memory not supported
-;
-;	mov	ah,0x86
-;
-;	jmp	reach_stack_stc
+
+int15_getextmem:
+	mov ax, 1		; function 1: 15.88 handler
+	clc			; non-XMS-entrypoint dispatcher
+	db 0Fh, 04h		; call into XMS interface
+	cmc			; if it returned NC, it means error
+	jnc .ret		; no error -->
+	mov ah, 86h
+.ret:
+	jmp reach_stack_carry
+
 
 ; ************************* INT 16h handler - keyboard
 

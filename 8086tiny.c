@@ -782,6 +782,22 @@ int main(int argc, char **argv)
 				R_M_POP(regs16[REG_DX]);
 				R_M_POP(regs16[REG_CX]);
 				R_M_POP(regs16[REG_AX]);
+			OPCODE 106: // ENTER
+				R_M_PUSH(regs16[REG_BP]);
+				scratch_uint = regs16[REG_SP];
+				scratch_int = (uint8_t)i_data2;
+				if (scratch_int > 0) {
+					for (; scratch_int > 1; --scratch_int) {
+						regs16[REG_BP] -= 2;
+						R_M_PUSH(CAST(uint16_t)mem[SEGREG(REG_SS, REG_BP,)]);
+					}
+					R_M_PUSH(scratch_uint);
+				}
+				regs16[REG_BP] = scratch_uint;
+				regs16[REG_SP] -= i_data0;
+			OPCODE 107: // LEAVE
+				regs16[REG_SP] = regs16[REG_BP];
+				R_M_POP(regs16[REG_BP]);
 			break; default:
 #ifdef INT6_DEBUG
 				printf("Interrupt 6 at %04X:%04X = %02X %02X %02X %02X\r\n",

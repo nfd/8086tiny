@@ -55,6 +55,9 @@
 #define REGS_BASE 0xF0000
 #define VIDEO_RAM_SIZE 0x10000
 
+#define MASK_SHIFT_COUNT(count) (31 & (count))
+// change this to just (count) to be detected as an 8086
+
 // Graphics/timer/keyboard update delays (explained later)
 #ifndef GRAPHICS_UPDATE_DELAY
 #define GRAPHICS_UPDATE_DELAY 360000
@@ -536,10 +539,10 @@ int main(int argc, char **argv)
 			OPCODE 12: // ROL|ROR|RCL|RCR|SHL|SHR|???|SAR reg/mem, 1/CL/imm (80186)
 				scratch2_uint = SIGN_OF(mem[rm_addr]),
 				scratch_uint = extra ? // xxx reg/mem, imm
-					/* 31 & */ (unsigned char)i_data1
+					MASK_SHIFT_COUNT((uint8_t)i_data1)
 				: // xxx reg/mem, CL
 					i_d
-						? /* 31 & */ regs8[REG_CL]
+						? MASK_SHIFT_COUNT(regs8[REG_CL])
 				: // xxx reg/mem, 1
 					1;
 				if (scratch_uint)

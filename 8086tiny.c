@@ -123,9 +123,9 @@
 
 // Decode mod, r_m and reg fields in instruction
 #define DECODE_RM_REG scratch2_uint = 4 * !i_mod, \
-					  op_to_addr = rm_addr = i_mod < 3 ? SEGREG(seg_override_en ? seg_override : bios_table_lookup[scratch2_uint + 3][i_rm], bios_table_lookup[scratch2_uint][i_rm], regs16[bios_table_lookup[scratch2_uint + 1][i_rm]] + bios_table_lookup[scratch2_uint + 2][i_rm] * i_data1+) : GET_REG_ADDR(i_rm), \
-					  op_from_addr = GET_REG_ADDR(i_reg), \
-					  i_d && (scratch_uint = op_from_addr, op_from_addr = rm_addr, op_to_addr = scratch_uint)
+	op_to_addr = rm_addr = i_mod < 3 ? SEGREG(seg_override_en ? seg_override : bios_table_lookup[scratch2_uint + 3][i_rm], bios_table_lookup[scratch2_uint][i_rm], regs16[bios_table_lookup[scratch2_uint + 1][i_rm]] + bios_table_lookup[scratch2_uint + 2][i_rm] * i_data1+) : GET_REG_ADDR(i_rm), \
+	op_from_addr = GET_REG_ADDR(i_reg), \
+	i_d && (scratch_uint = op_from_addr, op_from_addr = rm_addr, op_to_addr = scratch_uint)
 
 // Return memory-mapped register location (offset into mem array) for register #reg_id
 #define GET_REG_ADDR(reg_id) (REGS_BASE + (i_w ? 2 * reg_id : 2 * reg_id + reg_id / 4 & 7))
@@ -831,6 +831,21 @@ int main(int argc, char **argv)
 				regs16[i_reg] = op_result;
 				set_OF(set_CF((int32_t)op_result
 					- (int32_t)(int16_t)op_result));
+			OPCODE 109: // BOUND
+				if (i_mod == 3) {
+					pc_interrupt_reset(6);
+					break;
+				}
+				i_w = 1;
+				i_d = 0;
+				DECODE_RM_REG;
+				// op_to_addr = mem operand
+				// op_from_addr = reg operand
+				if ((CAST(int16_t)mem[op_from_addr]
+					< CAST(int16_t)mem[op_to_addr])
+					|| (CAST(int16_t)mem[op_from_addr]
+					> CAST(int16_t)mem[op_to_addr + 2]))
+					pc_interrupt_reset(5);
 			break; default:
 #ifdef INT6_DEBUG
 				printf("Interrupt 6 at %04X:%04X = %02X %02X %02X %02X\r\n",

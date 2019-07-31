@@ -33,6 +33,12 @@
 #ifdef XMS_DEBUG
 #include <stdio.h>
 #endif
+#ifdef INT6_DEBUG
+#include <stdio.h>
+#endif
+#ifdef IMUL_DEBUG
+#include <stdio.h>
+#endif
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -133,9 +139,9 @@
 
 // [I]MUL/[I]DIV/DAA/DAS/ADC/SBB helpers
 #define MUL_MACRO(op_data_type,out_regs) (set_opcode(0x10), \
-										  out_regs[i_w + 1] = (op_result = CAST(op_data_type)mem[rm_addr] * (op_data_type)*out_regs) >> 16, \
-										  regs16[REG_AX] = op_result, \
-										  set_OF(set_CF(op_result - (op_data_type)op_result)))
+	out_regs[i_w + 1] = (op_result = CAST(op_data_type)mem[rm_addr] * (op_data_type)*out_regs) >> 16, \
+	regs16[REG_AX] = op_result, \
+	set_OF(set_CF(op_result - (op_data_type)op_result)))
 #define DIV_MACRO(out_data_type,in_data_type,out_regs) (scratch_int = CAST(out_data_type)mem[rm_addr]) && !(scratch2_uint = (in_data_type)(scratch_uint = (out_regs[i_w+1] << 16) + regs16[REG_AX]) / scratch_int, scratch2_uint - (out_data_type)scratch2_uint) ? out_regs[i_w+1] = scratch_uint - scratch_int * (*out_regs = scratch2_uint) : pc_interrupt_reset(0)
 #define DAA_DAS(op1,op2) \
 	set_AF((((scratch_uchar = regs8[REG_AL]) & 0x0F) > 9) || regs8[FLAG_AF]) && (op_result = (regs8[REG_AL] op1 6), set_CF(regs8[FLAG_CF] || (regs8[REG_AL] op2 scratch_uchar))), \
@@ -798,6 +804,33 @@ int main(int argc, char **argv)
 			OPCODE 107: // LEAVE
 				regs16[REG_SP] = regs16[REG_BP];
 				R_M_POP(regs16[REG_BP]);
+			OPCODE 108: // IMUL r,r/m,imm16 / imm8
+				i_w = 1;
+				op_to_addr = op_from_addr;
+#ifdef IMUL_DEBUG
+				printf("imul extra=%u op_to_addr=%08Xh "
+					"i_data2=%04Xh i_reg=%u ",
+					extra, op_to_addr, i_data2, i_reg);
+#endif
+				if (extra) {
+					;
+#ifdef IMUL_DEBUG
+					printf("w ");
+#endif
+				} else {
+					i_data2 = (int16_t)(int8_t)i_data2;
+#ifdef IMUL_DEBUG
+					printf("b ");
+#endif
+				}
+				R_M_OP(mem[op_to_addr], *, i_data2);
+#ifdef IMUL_DEBUG
+				printf("i_data2(cast)=%04X op_result=%08Xh\r\n",
+					i_data2, op_result);
+#endif
+				regs16[i_reg] = op_result;
+				set_OF(set_CF((int32_t)op_result
+					- (int32_t)(int16_t)op_result));
 			break; default:
 #ifdef INT6_DEBUG
 				printf("Interrupt 6 at %04X:%04X = %02X %02X %02X %02X\r\n",

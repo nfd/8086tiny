@@ -854,6 +854,24 @@ int main(int argc, char **argv)
 					|| (CAST(int16_t)mem[op_from_addr]
 					> CAST(int16_t)mem[op_to_addr + 2]))
 					pc_interrupt_reset(5);
+			OPCODE 110: // INSx (extra=1), OUTSx (extra=2)
+				scratch2_uint = seg_override_en ? seg_override : REG_DS;
+
+				scratch_uint = rep_override_en ? regs16[REG_CX] : 1;
+				if (trap_flag && scratch_uint > 1) {
+					reset_ip_after_rep_trace = 1;
+					scratch_uint = 1;
+				}
+				for (; scratch_uint; scratch_uint--)
+				{
+				  if (extra == 1)
+				    callin(&mem[SEGREG(REG_ES, REG_DI,)], regs16[REG_DX]);
+				  else
+				    callout(&mem[SEGREG(scratch2_uint, REG_SI,)], regs16[REG_DX]);
+				  extra & 1 || INDEX_INC(REG_SI),
+				  extra & 2 || INDEX_INC(REG_DI);
+				  rep_override_en && regs16[REG_CX]--;
+				}
 			break; default:
 #ifdef INT6_DEBUG
 				printf("Interrupt 6 at %04X:%04X = %02X %02X %02X %02X\r\n",

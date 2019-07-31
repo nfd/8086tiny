@@ -426,7 +426,7 @@ int main(int argc, char **argv)
 		switch (xlat_opcode_id)
 		{
 			OPCODE_CHAIN 0: // Conditional jump (JAE, JNAE, etc.)
-				// i_w is the invert flag, e.g. i_w == 1 means JNAE, whereas i_w == 0 means JAE 
+				// i_w is the invert flag, e.g. i_w == 1 means JNAE, whereas i_w == 0 means JAE
 				scratch_uchar = raw_opcode_id / 2 & 7;
 				reg_ip += (char)i_data0 * (i_w ^ (regs8[bios_table_lookup[TABLE_COND_JUMP_DECODE_A][scratch_uchar]] || regs8[bios_table_lookup[TABLE_COND_JUMP_DECODE_B][scratch_uchar]] || regs8[bios_table_lookup[TABLE_COND_JUMP_DECODE_C][scratch_uchar]] ^ regs8[bios_table_lookup[TABLE_COND_JUMP_DECODE_D][scratch_uchar]]))
 			OPCODE 1: // MOV reg, imm

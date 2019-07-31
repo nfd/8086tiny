@@ -561,7 +561,7 @@ int main(int argc, char **argv)
 					if (i_reg > 3) // Shift operations
 						set_flags_type = FLAGS_UPDATE_SZP; // Shift instructions affect SZP
 					if (i_reg > 4) // SHR or SAR
-						set_CF(op_dest >> (scratch_uint - 1) & 1);
+						set_CF((uint64_t)op_dest >> (scratch_uint - 1) & 1);
 				}
 
 				switch (i_reg)
@@ -574,11 +574,11 @@ int main(int argc, char **argv)
 						R_M_OP_64_EQUALS(mem[rm_addr], + , scratch2_uint << (TOP_BIT - scratch_uint));
 						set_OF(SIGN_OF(op_result * 2) ^ set_CF(SIGN_OF(op_result)))
 					OPCODE 2: // RCL
-						R_M_OP_64_EQUALS(mem[rm_addr], + (regs8[FLAG_CF] << (scratch_uint - 1)) + , scratch2_uint >> (1 + TOP_BIT - scratch_uint));
-						set_OF(SIGN_OF(op_result) ^ set_CF(scratch2_uint & 1 << (TOP_BIT - scratch_uint)))
+						R_M_OP_64_EQUALS(mem[rm_addr], + ((uint64_t)regs8[FLAG_CF] << (scratch_uint - 1)) + , scratch2_uint >> (1 + TOP_BIT - scratch_uint));
+						set_OF(SIGN_OF(op_result) ^ set_CF(scratch2_uint & (uint64_t)1 << (TOP_BIT - scratch_uint)))
 					OPCODE 3: // RCR
-						R_M_OP_64_EQUALS(mem[rm_addr], + (regs8[FLAG_CF] << (TOP_BIT - scratch_uint)) + , scratch2_uint << (1 + TOP_BIT - scratch_uint));
-						set_CF(scratch2_uint & 1 << (scratch_uint - 1));
+						R_M_OP_64_EQUALS(mem[rm_addr], + ((uint64_t)regs8[FLAG_CF] << (TOP_BIT - scratch_uint)) + , scratch2_uint << (1 + TOP_BIT - scratch_uint));
+						set_CF(scratch2_uint & (uint64_t)1 << (scratch_uint - 1));
 						set_OF(SIGN_OF(op_result) ^ SIGN_OF(op_result * 2))
 					OPCODE 4: // SHL
 						set_OF(SIGN_OF(op_result) ^ set_CF(SIGN_OF(op_dest << (scratch_uint - 1))))
@@ -587,7 +587,7 @@ int main(int argc, char **argv)
 					OPCODE 7: // SAR
 						scratch_uint < TOP_BIT || set_CF(scratch2_uint);
 						set_OF(0);
-						R_M_OP_64_EQUALS(mem[rm_addr], +, scratch2_uint *= ~(((1 << TOP_BIT) - 1) >> scratch_uint));
+						R_M_OP_64_EQUALS(mem[rm_addr], +, scratch2_uint *= ~((uint64_t)(((uint64_t)1 << TOP_BIT) - 1) >> scratch_uint));
 				}
 			OPCODE 13: // LOOPxx|JCZX
 				scratch_uint = !!--regs16[REG_CX];

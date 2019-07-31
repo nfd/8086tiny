@@ -716,6 +716,10 @@ int main(int argc, char **argv)
 				make_flags(),
 				regs8[REG_AH] = scratch_uint
 			OPCODE 37: // LES|LDS reg, r/m
+				if (i_mod == 3) {
+					pc_interrupt_reset(6);
+					break;
+				}
 				i_w = i_d = 1;
 				DECODE_RM_REG;
 				OP(=);

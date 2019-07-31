@@ -39,13 +39,21 @@ for debuggers, interrupt-lockout for mov or pop to ss,
 and idling with the HLT instruction. I also fixed the
 shift/rotate count handling so that the machine is
 always detected as an 8086, as most 186 instructions
-are still missing.
+are still missing. (This is still an option in the
+source but now defaults to being detected as an 186.)
+All 186 instructions were added. The invalid opcode
+condition now invokes interrupt 6, except for the
+0Fh-prefixed emulator extension instructions with a
+second byte below 20h. (Codes 00h to 04h are in use.)
 
 Further, the BIOS's interrupt handlers were modified
 to be more compatible. Data has been aligned, and several
 corner cases are handled more properly. The two forms of
 186+ push instructions with immediates were implemented,
-which are used by FreeCOM (a bug).
+which are used by FreeCOM (a bug). (Now all of the 186
+instructions were added.) Three bugs in the emulator
+were fixed, two of which affected some of the shift and
+rotate instructions, one the DAA and DAS instructions.
 
 A DOS driver and coupled emulator interface add XMS 2.00
 handling to the machine, including HMA, UMB, and XMS

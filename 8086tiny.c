@@ -810,7 +810,7 @@ int main(int argc, char **argv)
 			OPCODE 106: // ENTER
 				R_M_PUSH(regs16[REG_BP]);
 				scratch_uint = regs16[REG_SP];
-				scratch_int = (uint8_t)i_data2;
+				scratch_int = (uint8_t)i_data2 & 31;
 				if (scratch_int > 0) {
 					for (; scratch_int > 1; --scratch_int) {
 						regs16[REG_BP] -= 2;

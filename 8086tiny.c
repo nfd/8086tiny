@@ -886,6 +886,9 @@ int main(int argc, char **argv)
 			OPCODE 111: // LOCK prefix
 				seg_override_en && seg_override_en++;
 				rep_override_en && rep_override_en++;
+			OPCODE 112: // INT1
+				++reg_ip;
+				pc_interrupt(1);
 			break; default:
 #ifdef INT6_DEBUG
 				printf("Interrupt 6 at %04X:%04X = %02X %02X %02X %02X\r\n",

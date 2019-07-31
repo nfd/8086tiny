@@ -189,7 +189,7 @@
 #endif
 
 // Global variable definitions
-unsigned char mem[RAM_SIZE], io_ports[IO_PORT_COUNT],
+unsigned char mem[RAM_SIZE + 16], io_ports[IO_PORT_COUNT + 16],
 	*opcode_stream, *regs8, i_rm, i_w, i_reg, i_mod, i_mod_size, i_d, i_reg4bit,
 	raw_opcode_id, xlat_opcode_id, extra, rep_mode, seg_override_en, rep_override_en,
 	trap_flag, int8_asap, scratch_uchar, io_hi_lo, *vid_mem_base, spkr_en, bios_table_lookup[20][256],

@@ -876,6 +876,9 @@ int main(int argc, char **argv)
 				  extra & 2 || INDEX_INC(REG_DI);
 				  rep_override_en && regs16[REG_CX]--;
 				}
+			OPCODE 111: // LOCK prefix
+				seg_override_en && seg_override_en++;
+				rep_override_en && rep_override_en++;
 			break; default:
 #ifdef INT6_DEBUG
 				printf("Interrupt 6 at %04X:%04X = %02X %02X %02X %02X\r\n",
@@ -887,8 +890,13 @@ int main(int argc, char **argv)
 #endif
 				pc_interrupt_reset(6);
 		}
-		if (xlat_opcode_id != 23 && xlat_opcode_id != 27) {
+		if (xlat_opcode_id != 23
+			 && xlat_opcode_id != 27
+			 && xlat_opcode_id != 111) {
 			rep_override_en = seg_override_en = 0;
+			if (prior_setting_ss)
+				setting_ss = 0;
+			prior_setting_ss = setting_ss;
 		}
 
 
@@ -914,10 +922,6 @@ int main(int argc, char **argv)
 			if (set_flags_type & FLAGS_UPDATE_OC_LOGIC)
 				set_CF(0), set_OF(0);
 		}
-
-		if (prior_setting_ss)
-			setting_ss = 0;
-		prior_setting_ss = setting_ss;
 
 		// Poll timer/keyboard every KEYBOARD_TIMER_UPDATE_DELAY instructions
 		if (!setting_ss && !(++inst_counter % KEYBOARD_TIMER_UPDATE_DELAY))
@@ -971,7 +975,9 @@ int main(int argc, char **argv)
 			hlt_this_time = 0;
 		}
 
-		if (!seg_override_en && !rep_override_en) {
+		if (!seg_override_en
+			&& !rep_override_en
+			&& xlat_opcode_id != 111) {
 			reg_ip_before_rep_trace = reg_ip;
 
 			// Application has set trap flag, so fire INT 1

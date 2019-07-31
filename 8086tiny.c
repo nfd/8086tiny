@@ -196,7 +196,8 @@ unsigned char mem[RAM_SIZE + 16], io_ports[IO_PORT_COUNT + 16],
 	*opcode_stream, *regs8, i_rm, i_w, i_reg, i_mod, i_mod_size, i_d, i_reg4bit,
 	raw_opcode_id, xlat_opcode_id, extra, rep_mode, seg_override_en, rep_override_en,
 	trap_flag, int8_asap, scratch_uchar, io_hi_lo, *vid_mem_base, spkr_en, bios_table_lookup[20][256],
-	hlt_this_time, setting_ss, prior_setting_ss, reset_ip_after_rep_trace;
+	hlt_this_time, setting_ss, prior_setting_ss, reset_ip_after_rep_trace,
+	shift_count;
 unsigned short *regs16, reg_ip, seg_override, file_index, wave_counter, reg_ip_before_rep_trace;
 unsigned int op_source, op_dest, rm_addr, op_to_addr, op_from_addr, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, inst_counter, set_flags_type, GRAPHICS_X, GRAPHICS_Y, pixel_colors[16], vmem_ctr;
 int op_result, disk[3], scratch_int;
@@ -392,7 +393,7 @@ int main(int argc, char **argv)
 
 		// Extract instruction data fields
 		i_data0 = CAST(short)opcode_stream[1];
-		i_data1 = CAST(short)opcode_stream[2];
+		shift_count = i_data1 = CAST(short)opcode_stream[2];
 		i_data2 = CAST(short)opcode_stream[3];
 
 		// seg_override_en and rep_override_en contain number of instructions to hold segment override and REP prefix respectively
@@ -408,12 +409,15 @@ int main(int argc, char **argv)
 			i_rm = i_data0 & 7;
 			i_reg = i_data0 / 8 & 7;
 
-			if ((!i_mod && i_rm == 6) || (i_mod == 2))
+			if ((!i_mod && i_rm == 6) || (i_mod == 2)) {
 				i_data2 = CAST(short)opcode_stream[4];
-			else if (i_mod != 1)
+				shift_count = opcode_stream[4];
+			} else if (i_mod != 1) {
 				i_data2 = i_data1;
-			else // If i_mod is 1, operand is (usually) 8 bits rather than 16 bits
+			} else { // If i_mod is 1, operand is (usually) 8 bits rather than 16 bits
 				i_data1 = (char)i_data1;
+				shift_count = opcode_stream[3];
+			}
 
 			DECODE_RM_REG;
 		}
@@ -539,7 +543,7 @@ int main(int argc, char **argv)
 			OPCODE 12: // ROL|ROR|RCL|RCR|SHL|SHR|???|SAR reg/mem, 1/CL/imm (80186)
 				scratch2_uint = SIGN_OF(mem[rm_addr]),
 				scratch_uint = extra ? // xxx reg/mem, imm
-					MASK_SHIFT_COUNT((uint8_t)i_data1)
+					MASK_SHIFT_COUNT(shift_count)
 				: // xxx reg/mem, CL
 					i_d
 						? MASK_SHIFT_COUNT(regs8[REG_CL])

@@ -852,6 +852,8 @@ int main(int argc, char **argv)
 				R_M_POP(regs16[REG_BP]);
 			OPCODE 108: // IMUL r,r/m,imm16 / imm8
 				i_w = 1;
+				i_d = 1;
+				DECODE_RM_REG;
 				op_to_addr = op_from_addr;
 #ifdef IMUL_DEBUG
 				printf("imul extra=%u op_to_addr=%08Xh "

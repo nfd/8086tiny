@@ -65,6 +65,9 @@
 #define GRAPHICS_UPDATE_DELAY 360000
 #endif
 #define KEYBOARD_TIMER_UPDATE_DELAY 20000
+#define HALT_TIME_MICROSECONDS 100
+#define KEYBOARD_TIMER_DELAY_FROM_HALT 1000
+#define GRAPHICS_DELAY_FROM_HALT 1000
 
 // 16-bit register decodes
 #define REG_AX 0
@@ -201,7 +204,7 @@ unsigned char mem[RAM_SIZE + 16], io_ports[IO_PORT_COUNT + 16],
 	hlt_this_time, setting_ss, prior_setting_ss, reset_ip_after_rep_trace,
 	shift_count;
 unsigned short *regs16, reg_ip, seg_override, file_index, wave_counter, reg_ip_before_rep_trace;
-unsigned int op_source, op_dest, rm_addr, op_to_addr, op_from_addr, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, inst_counter, set_flags_type, GRAPHICS_X, GRAPHICS_Y, pixel_colors[16], vmem_ctr;
+unsigned int op_source, op_dest, rm_addr, op_to_addr, op_from_addr, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, keyboard_timer_inst_counter, graphics_inst_counter, set_flags_type, GRAPHICS_X, GRAPHICS_Y, pixel_colors[16], vmem_ctr;
 int op_result, disk[3], scratch_int;
 time_t clock_buf;
 struct timeb ms_clock;
@@ -963,13 +966,19 @@ int main(int argc, char **argv)
 		}
 
 		// Poll timer/keyboard every KEYBOARD_TIMER_UPDATE_DELAY instructions
-		if (!setting_ss && !(++inst_counter % KEYBOARD_TIMER_UPDATE_DELAY))
-			int8_asap = 1, hlt_this_time = 0;
+		if (!setting_ss &&
+		  (++keyboard_timer_inst_counter >= KEYBOARD_TIMER_UPDATE_DELAY)) {
+			keyboard_timer_inst_counter = 0;
+			hlt_this_time = 0;
+			int8_asap = 1;
+		}
 
 #ifndef NO_GRAPHICS
 		// Update the video graphics display every GRAPHICS_UPDATE_DELAY instructions
-		if (!setting_ss && !(inst_counter % GRAPHICS_UPDATE_DELAY))
+		if (!setting_ss &&
+		  (++graphics_inst_counter >= GRAPHICS_UPDATE_DELAY))
 		{
+			graphics_inst_counter = 0;
 			hlt_this_time = 0;
 			// Video card in graphics mode?
 			if (io_ports[0x3B8] & 2)
@@ -1009,9 +1018,11 @@ int main(int argc, char **argv)
 		if (hlt_this_time) {
 			struct timespec ts;
 			ts.tv_sec = 0;
-			ts.tv_nsec = 100 * 1000;
+			ts.tv_nsec = HALT_TIME_MICROSECONDS * 1000;
 			nanosleep(&ts, NULL);
 			hlt_this_time = 0;
+			keyboard_timer_inst_counter += KEYBOARD_TIMER_DELAY_FROM_HALT;
+			graphics_inst_counter += GRAPHICS_DELAY_FROM_HALT;
 		}
 
 		if (!seg_override_en

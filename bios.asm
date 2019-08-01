@@ -402,7 +402,7 @@ disp_msg:
 
 msg:
 .error_boot:		db "Error during boot!",13,10,0
-.error_reading: 	db "Could not read from bot device.",13,10,0
+.error_reading: 	db "Could not read from boot device.",13,10,0
 .error_signature:	db "Boot sector signature mismatch.",13,10,0
 
 

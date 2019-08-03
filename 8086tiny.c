@@ -546,11 +546,20 @@ int main(int argc, char **argv)
 				}
 			OPCODE 10: // MOV sreg, r/m | POP r/m | LEA reg, r/m
 				if (!i_w) { // MOV
-					i_w = 1,
-					i_reg += 8,
-					DECODE_RM_REG,
+					i_w = 1;
+					i_reg += 8;
+					DECODE_RM_REG;
+					if (i_d && (op_to_addr == REGS_BASE + 2 * REG_CS
+						  || op_to_addr > REGS_BASE + 2 * REG_DS)) {
+						pc_interrupt_reset(6);
+						break;
+					}
+					if (!i_d && (op_from_addr > REGS_BASE + 2 * REG_DS)) {
+						pc_interrupt_reset(6);
+						break;
+					}
 					OP(=);
-					if (op_to_addr == REGS_BASE + 2 * REG_SS)
+					if (i_d && op_to_addr == REGS_BASE + 2 * REG_SS)
 						setting_ss = 1;
 				} else if (!i_d) // LEA
 					seg_override_en = 1,

@@ -1059,6 +1059,24 @@ int main(int argc, char **argv)
 }
 
 
+/*
+
+8086tiny XMS 2.00 implementation (extended memory functions 8 to 15)
+ 2019 by C. Masloch
+
+This work is licensed under the MIT License. See included LICENSE.TXT.
+
+Alternatively, this work may be used under these conditions:
+
+Usage of the works is permitted provided that this
+instrument is retained with the works, so that any entity
+that uses the works is notified of this instrument.
+
+DISCLAIMER: THE WORKS ARE WITHOUT WARRANTY.
+
+*/
+
+
 struct xmshandle {
 	void * allocation;
 	uint32_t size;

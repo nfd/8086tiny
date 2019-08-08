@@ -4,6 +4,10 @@
 8086tiny XMS driver (UMBs, HMA)
  2019 by C. Masloch
 
+This work is licensed under the MIT License. See included LICENSE.TXT.
+
+Alternatively, this work may be used under these conditions:
+
 Usage of the works is permitted provided that this
 instrument is retained with the works, so that any entity
 that uses the works is notified of this instrument.

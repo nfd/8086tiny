@@ -4080,6 +4080,10 @@ tm_msec		equ $+36
 
 
 	times 0FEF0h - ($ - $$) db 0
+	; The BIOS image is loaded at F000h:0100h,
+	;  so 0100h+FEF0h points to FFF0h which is
+	;  the last paragraph of the image, as well as
+	;  of memory below the HMA.
 
 mem_top:
 	jmp 0F000h:100h

@@ -1238,9 +1238,9 @@ void callxms() {
     OPCODE 9:
 #ifdef XMS_FAIL_FIRST_ALLOC
 	{
-		static int counter = 0;
-		counter++;
-		if (counter <= 1) {
+		static uint8_t enabled = 0;
+		if (! enabled) {
+			enabled = 1;
 			set_CF(1); return;
 			// signal failure to tinyxms
 		}

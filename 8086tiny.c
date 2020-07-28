@@ -1106,6 +1106,14 @@ struct __attribute__((__packed__)) xmsmove {
 
 
 struct xmshandle xmshandles[AMOUNT_XMS_HANDLES];
+/* Handle 0 in the XMS interface is invalid
+ * because it refers to 86 Mode memory for
+ * the XMS move handling. Therefore, we check
+ * that handles are nonzero and then index
+ * into this array with handle number less one
+ * so that the first array entry corresponds
+ * to handle number 1 from the interface.
+ */
 
 uint8_t freexms(unsigned int ii, uint8_t force) {
     	if (ii == 0 || ii > AMOUNT_XMS_HANDLES)
@@ -1204,7 +1212,7 @@ void callxms() {
   uint64_t uu64;
   void* pp;
   if (regs8[FLAG_CF]) {		// CY, this is an XMS entrypoint call
-    set_CF(0);
+    set_CF(0);			// signal that we support this
 #ifdef XMS_DEBUG
 	printf("xms call ax=%04Xh dx=%04Xh bx=%04Xh\r\n",
 		regs16[REG_AX], regs16[REG_DX], regs16[REG_BX]);
@@ -1234,6 +1242,7 @@ void callxms() {
 		counter++;
 		if (counter <= 1) {
 			set_CF(1); return;
+			// signal failure to tinyxms
 		}
 	}
 #endif
@@ -1263,6 +1272,8 @@ void callxms() {
 	struct xmsmove *mm = (void*)mem + SEGREG(REG_DS, REG_SI,);
 	void* psource;
 	void* pdest;
+	// Odd lengths may be rejected with
+	// error code A7h but we support them.
 #ifdef XMS_DEBUG
 	printf("xmsmove count=%u sourcehandle=%u sourceaddress=%08Xh"
 		" desthandle=%u destaddress=%08Xh\r\n",
@@ -1283,6 +1294,9 @@ void callxms() {
 	printf("xmsmove psource=%08Xh pdest=%08Xh mem=%08Xh\r\n",
 		psource, pdest, mem);
 #endif
+	// memmove acts correctly even when memory overlaps.
+	// We are allowed to return error A8h if a backwards
+	// move is needed, but we may support it too.
 	memmove(pdest, psource, mm->count);
 	returnxms(0);
 	}
@@ -1324,6 +1338,7 @@ void callxms() {
 	uu64 <<= 10;
 	pp = realloc(xmshandles[regs16[REG_DX] - 1].allocation, uu64);
 	if (!pp) {
+		// original pointer in the handle still valid
 		returnxms(0xA0);
 		break;
 	}
@@ -1360,7 +1375,7 @@ void callxms() {
 	  uu64 = 0xFFFF;	// maximum reportable
 	}
 	regs16[REG_AX] = uu64;
-	set_CF(1);
+	set_CF(1);		// this means no error here
     }
   }
 }

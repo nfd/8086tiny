@@ -103,32 +103,16 @@
 // Reinterpretation cast
 #define CAST(a) *(a*)&
 
-// Keyboard driver for console. This may need changing for UNIX/non-UNIX platforms
-#ifdef _WIN32
-#define KEYBOARD_DRIVER kbhit() && (mem[0x4A6] = getch(), pc_interrupt(7))
-#else
-#define KEYBOARD_DRIVER read(0, mem + 0x4A6, 1) && (int8_asap = (mem[0x4A6] == 0x1B), pc_interrupt(7))
-#endif
-
-// Keyboard driver for SDL
-#ifdef NO_GRAPHICS
-#define SDL_KEYBOARD_DRIVER KEYBOARD_DRIVER
-#else
-#define SDL_KEYBOARD_DRIVER sdl_screen ? SDL_PollEvent(&sdl_event) && (sdl_event.type == SDL_KEYDOWN || sdl_event.type == SDL_KEYUP) && (scratch_uint = sdl_event.key.keysym.unicode, scratch2_uint = sdl_event.key.keysym.mod, CAST(short)mem[0x4A6] = 0x400 + 0x800*!!(scratch2_uint & KMOD_ALT) + 0x1000*!!(scratch2_uint & KMOD_SHIFT) + 0x2000*!!(scratch2_uint & KMOD_CTRL) + 0x4000*(sdl_event.type == SDL_KEYUP) + ((!scratch_uint || scratch_uint > 0x7F) ? sdl_event.key.keysym.sym : scratch_uint), pc_interrupt(7)) : (KEYBOARD_DRIVER)
-#endif
-
 // Global variable definitions
 unsigned char mem[RAM_SIZE + 16], io_ports[IO_PORT_COUNT + 16],
 	*opcode_stream, *regs8, i_rm, i_w, i_reg, i_mod, i_mod_size, i_d, i_reg4bit,
 	raw_opcode_id, xlat_opcode_id, extra, rep_mode, seg_override_en, rep_override_en,
-	trap_flag, int8_asap, scratch_uchar, io_hi_lo, *vid_mem_base, spkr_en, bios_table_lookup[20][256],
+	trap_flag, scratch_uchar, io_hi_lo, *vid_mem_base, spkr_en, bios_table_lookup[20][256],
 	hlt_this_time, setting_ss, prior_setting_ss, reset_ip_after_rep_trace,
 	shift_count;
 unsigned short *regs16, reg_ip, seg_override, file_index, wave_counter, reg_ip_before_rep_trace;
 unsigned int op_source, op_dest, rm_addr, op_to_addr, op_from_addr, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, keyboard_timer_inst_counter, graphics_inst_counter, set_flags_type, GRAPHICS_X, GRAPHICS_Y, pixel_colors[16], vmem_ctr;
 int op_result, scratch_int;
-time_t clock_buf;
-struct timeb ms_clock;
 
 #ifndef NO_GRAPHICS
 SDL_AudioSpec sdl_audio = {44100, AUDIO_U8, 1, 0, 128};
@@ -136,6 +120,7 @@ SDL_Surface *sdl_screen;
 SDL_Event sdl_event;
 unsigned short vid_addr_lookup[VIDEO_RAM_SIZE], cga_colors[4] = {0 /* Black */, 0x1F1F /* Cyan */, 0xE3E3 /* Magenta */, 0xFFFF /* White */};
 #endif
+
 
 // Helper functions
 
@@ -275,6 +260,31 @@ code_to_utf8(unsigned char *const buffer,
 	buffer[2] = 0x80 | (code & 0x3F);          /* 10xxxxxx */
 	return 3;
 }
+
+// Keyboard driver for console. This may need changing for UNIX/non-UNIX platforms
+#ifdef _WIN32
+void keyboard_driver(struct x86_state *s) {
+	kbhit() && (mem[0x4A6] = getch(), pc_interrupt(7));
+}
+#else
+void keyboard_driver(struct x86_state *s) {
+	read(0, mem + 0x4A6, 1) && (s->int8_asap = (mem[0x4A6] == 0x1B), pc_interrupt(7));
+}
+#endif
+
+
+// Keyboard driver for SDL
+#ifdef NO_GRAPHICS
+void sdl_keyboard_driver(struct x86_state *s) {
+	keyboard_driver(s);
+}
+#else
+void sdl_keyboard_driver(struct x86_state *s) {
+	sdl_screen ? SDL_PollEvent(&sdl_event) && (sdl_event.type == SDL_KEYDOWN || sdl_event.type == SDL_KEYUP) && (scratch_uint = sdl_event.key.keysym.unicode, scratch2_uint = sdl_event.key.keysym.mod, CAST(short)mem[0x4A6] = 0x400 + 0x800*!!(scratch2_uint & KMOD_ALT) + 0x1000*!!(scratch2_uint & KMOD_SHIFT) + 0x2000*!!(scratch2_uint & KMOD_CTRL) + 0x4000*(sdl_event.type == SDL_KEYUP) + ((!scratch_uint || scratch_uint > 0x7F) ? sdl_event.key.keysym.sym : scratch_uint), pc_interrupt(7)) : (keyboard_driver(s));
+}
+#endif
+
+
 
 struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_filename, char *hdd_filename, void(*redraw_display)(struct x86_state *), void(*keyboard_driver)(struct x86_state *)) {
 #ifndef NO_GRAPHICS
@@ -729,10 +739,10 @@ void x86_step(struct x86_state *s)
 					write(1, buf, len);
 				}
 				OPCODE 1: // GET_RTC
-					time(&clock_buf);
-				ftime(&ms_clock);
-				memcpy(mem + SEGREG(REG_ES, REG_BX,), localtime(&clock_buf), sizeof(struct tm));
-				CAST(short)mem[SEGREG(REG_ES, REG_BX, 36+)] = ms_clock.millitm;
+					time(&s->clock_buf);
+				ftime(&s->ms_clock);
+				memcpy(mem + SEGREG(REG_ES, REG_BX,), localtime(&s->clock_buf), sizeof(struct tm));
+				CAST(short)mem[SEGREG(REG_ES, REG_BX, 36+)] = s->ms_clock.millitm;
 				OPCODE 2: // DISK_READ
 				OPCODE_CHAIN 3: // DISK_WRITE
 				{
@@ -913,7 +923,7 @@ void x86_step(struct x86_state *s)
 			(++keyboard_timer_inst_counter >= KEYBOARD_TIMER_UPDATE_DELAY)) {
 		keyboard_timer_inst_counter = 0;
 		hlt_this_time = 0;
-		int8_asap = 1;
+		s->int8_asap = 1;
 	}
 
 #ifndef NO_GRAPHICS
@@ -981,8 +991,11 @@ void x86_step(struct x86_state *s)
 
 		// If a timer tick is pending, interrupts are enabled, and no overrides/REP are active,
 		// then process the tick and check for new keystrokes
-		if (!setting_ss && int8_asap && regs8[FLAG_IF] && !regs8[FLAG_TF])
-			pc_interrupt(0xA), int8_asap = 0, SDL_KEYBOARD_DRIVER;
+		if (!setting_ss && s->int8_asap && regs8[FLAG_IF] && !regs8[FLAG_TF]) {
+			pc_interrupt(0xA);
+			s->int8_asap = 0;
+			sdl_keyboard_driver(s);
+		}
 	}
 }
 

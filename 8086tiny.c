@@ -53,11 +53,6 @@
 #include <SDL/SDL.h>
 #endif
 
-extern unsigned char mem[RAM_SIZE + 16];
-extern unsigned char *opcode_stream;
-extern unsigned short *regs16;
-extern unsigned short reg_ip;
-
 // Emulator entry point
 int main(int argc, char **argv)
 {
@@ -71,9 +66,11 @@ int main(int argc, char **argv)
 	struct x86_state *s = x86_init(boot_from_hdd, argv[1], argv[2], argv[3], NULL, NULL);
 
 	// Instruction execution loop. Terminates if CS:IP = 0:0
-	for (; opcode_stream = mem + 16 * regs16[REG_CS] + reg_ip, opcode_stream != s->mem;)
+	for (; s->opcode_stream = s->mem + 16 * s->regs16[REG_CS] + s->reg_ip, s->opcode_stream != s->mem;)
 	{
 		x86_step(s);
+		x86_handle_hlt(s);
+		x86_handle_irqs(s);
 	}
 
 #ifndef NO_GRAPHICS

@@ -49,6 +49,7 @@
 struct x86_state {
 	void (*redraw_display)(struct x86_state *);
 	void (*keyboard_driver)(struct x86_state *);
+	void (*pause_audio)(int pause);
 	int op_result, disk_bios, disk_fdd, disk_hdd;
 	time_t clock_buf;
 	struct timeb ms_clock;
@@ -59,10 +60,10 @@ struct x86_state {
 	unsigned char mem[RAM_SIZE + 16];
 };
 
-struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_filename, char *hdd_filename, void(*redraw_display)(struct x86_state *), void(*keyboard_driver)(struct x86_state *));
+struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_filename, char *hdd_filename, void(*redraw_display)(struct x86_state *), void(*keyboard_driver)(struct x86_state *), void(*pause_audio)(int pause));
 void x86_free(struct x86_state *);
 void x86_step(struct x86_state *);
 void x86_handle_hlt(struct x86_state *s);
 void x86_handle_irqs(struct x86_state *s);
 //char set_CF(struct x86_state *s, int new_CF);
-//char pc_interrupt(struct x86_state *s, unsigned char interrupt_num);
+char pc_interrupt(struct x86_state *s, unsigned char interrupt_num);

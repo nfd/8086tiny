@@ -4,11 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#ifndef NO_GRAPHICS
-#include <SDL/SDL.h>
-#else
 #include <time.h>
-#endif
 
 #include "x86.h"
 #include "cp437.h"
@@ -106,14 +102,6 @@
 // Global variable definitions
 unsigned char bios_table_lookup[20][256];
 
-#ifndef NO_GRAPHICS
-SDL_AudioSpec sdl_audio = {44100, AUDIO_U8, 1, 0, 128};
-SDL_Surface *sdl_screen;
-SDL_Event sdl_event;
-unsigned short vid_addr_lookup[VIDEO_RAM_SIZE], cga_colors[4] = {0 /* Black */, 0x1F1F /* Cyan */, 0xE3E3 /* Magenta */, 0xFFFF /* White */};
-#endif
-
-
 // Helper functions
 
 void callxms(struct x86_state *);
@@ -201,17 +189,6 @@ int AAA_AAS(struct x86_state *s, char which_operation)
 	return (s->regs16[REG_AX] += 262 * which_operation*set_AF(s, set_CF(s, ((s->regs8[REG_AL] & 0x0F) > 9) || s->regs8[FLAG_AF])), s->regs8[REG_AL] &= 0x0F);
 }
 
-#ifndef NO_GRAPHICS
-void audio_callback(void *data, unsigned char *stream, int len)
-{
-	struct x86_state *s = data;
-	for (int i = 0; i < len; i++)
-		stream[i] = (s->spkr_en == 3) && CAST(unsigned short)s->mem[0x4AA] ? -((54 * s->wave_counter++ / CAST(unsigned short)s->mem[0x4AA]) & 1) : sdl_audio.silence;
-
-	s->spkr_en = s->io_ports[0x61] & 3;
-}
-#endif
-
 void callin(struct x86_state *s, uint8_t* dest, uint16_t port) {
 	s->io_ports[0x20] = 0; // PIC EOI
 	s->io_ports[0x42] = --s->io_ports[0x40]; // PIT channel 0/2 read placeholder
@@ -226,7 +203,7 @@ void callout(struct x86_state *s, uint8_t* source, uint16_t port) {
 	port == 0x61 && (s->io_hi_lo = 0, s->spkr_en |= *source & 3); // Speaker control
 	(port == 0x40 || port == 0x42) && (s->io_ports[0x43] & 6) && (s->mem[0x469 + port - (s->io_hi_lo ^= 1)] = *source); // PIT rate programming
 #ifndef NO_GRAPHICS
-	port == 0x43 && (s->io_hi_lo = 0, *source >> 6 == 2) && (SDL_PauseAudio((*source & 0xF7) != 0xB6), 0); // Speaker enable
+	port == 0x43 && (s->io_hi_lo = 0, *source >> 6 == 2) && (s->pause_audio((*source & 0xF7) != 0xB6), 0); // Speaker enable
 #endif
 	port == 0x3D5 && (s->io_ports[0x3D4] >> 1 == 6) && (s->mem[0x4AD + !(s->io_ports[0x3D4] & 1)] = *source); // CRT video RAM start offset
 	port == 0x3D5 && (s->io_ports[0x3D4] >> 1 == 7) && (s->scratch2_uint = ((s->mem[0x49E]*80 + s->mem[0x49D] + CAST(short)s->mem[0x4AD]) & (s->io_ports[0x3D4] & 1 ? 0xFF00 : 0xFF)) + (*source << (s->io_ports[0x3D4] & 1 ? 0 : 8)) - CAST(short)s->mem[0x4AD], s->mem[0x49D] = s->scratch2_uint % 80, s->mem[0x49E] = s->scratch2_uint / 80); // CRT cursor position
@@ -254,44 +231,13 @@ code_to_utf8(unsigned char *const buffer,
 	return 3;
 }
 
-// Keyboard driver for console. This may need changing for UNIX/non-UNIX platforms
-#ifdef _WIN32
-void keyboard_driver(struct x86_state *s) {
-	kbhit() && (s->mem[0x4A6] = getch(), pc_interrupt(7));
-}
-#else
-void keyboard_driver(struct x86_state *s) {
-	read(0, s->mem + 0x4A6, 1) && (s->int8_asap = (s->mem[0x4A6] == 0x1B), pc_interrupt(s, 7));
-}
-#endif
 
-
-// Keyboard driver for SDL
-#ifdef NO_GRAPHICS
-void sdl_keyboard_driver(struct x86_state *s) {
-	keyboard_driver(s);
-}
-#else
-void sdl_keyboard_driver(struct x86_state *s) {
-	sdl_screen ? SDL_PollEvent(&sdl_event) && (sdl_event.type == SDL_KEYDOWN || sdl_event.type == SDL_KEYUP) && (s->scratch_uint = sdl_event.key.keysym.unicode, s->scratch2_uint = sdl_event.key.keysym.mod, CAST(short)s->mem[0x4A6] = 0x400 + 0x800*!!(s->scratch2_uint & KMOD_ALT) + 0x1000*!!(s->scratch2_uint & KMOD_SHIFT) + 0x2000*!!(s->scratch2_uint & KMOD_CTRL) + 0x4000*(sdl_event.type == SDL_KEYUP) + ((!s->scratch_uint || s->scratch_uint > 0x7F) ? sdl_event.key.keysym.sym : s->scratch_uint), pc_interrupt(s, 7)) : (keyboard_driver(s));
-}
-#endif
-
-
-
-struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_filename, char *hdd_filename, void(*redraw_display)(struct x86_state *), void(*keyboard_driver)(struct x86_state *)) {
+struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_filename, char *hdd_filename, void(*redraw_display)(struct x86_state *), void(*keyboard_driver)(struct x86_state *), void(*pause_audio)(int pause)) {
 	struct x86_state *s = calloc(1, sizeof(struct x86_state));
 
-#ifndef NO_GRAPHICS
-	// Initialise SDL
-	SDL_Init(SDL_INIT_AUDIO);
-	sdl_audio.callback = audio_callback;
-	sdl_audio.userdata = s;
-#ifdef _WIN32
-	sdl_audio.samples = 512;
-#endif
-	SDL_OpenAudio(&sdl_audio, 0);
-#endif
+	s->redraw_display = redraw_display;
+	s->keyboard_driver = keyboard_driver;
+	s->pause_audio = pause_audio;
 
 	// regs16 and reg8 point to F000:0, the start of memory-mapped registers. CS is initialised to F000
 	s->regs16 = (unsigned short *)(s->regs8 = s->mem + REGS_BASE);
@@ -925,41 +871,7 @@ void x86_step(struct x86_state *s)
 	if (!s->setting_ss &&
 			(++s->graphics_inst_counter >= GRAPHICS_UPDATE_DELAY))
 	{
-		s->graphics_inst_counter = 0;
-		s->hlt_this_time = 0;
-		// Video card in graphics mode?
-		if (s->io_ports[0x3B8] & 2)
-		{
-			// If we don't already have an SDL window open, set it up and compute color and video memory translation tables
-			if (!sdl_screen)
-			{
-				for (int i = 0; i < 16; i++)
-					s->pixel_colors[i] = s->mem[0x4AC] ? // CGA?
-						cga_colors[(i & 12) >> 2] + (cga_colors[i & 3] << 16) // CGA -> RGB332
-						: 0xFF*(((i & 1) << 24) + ((i & 2) << 15) + ((i & 4) << 6) + ((i & 8) >> 3)); // Hercules -> RGB332
-
-				for (int i = 0; i < s->GRAPHICS_X * s->GRAPHICS_Y / 4; i++)
-					vid_addr_lookup[i] = i / s->GRAPHICS_X * (s->GRAPHICS_X / 8) + (i / 2) % (s->GRAPHICS_X / 8) + 0x2000*(s->mem[0x4AC] ? (2 * i / s->GRAPHICS_X) % 2 : (4 * i / s->GRAPHICS_X) % 4);
-
-				SDL_Init(SDL_INIT_VIDEO);
-				sdl_screen = SDL_SetVideoMode(s->GRAPHICS_X, s->GRAPHICS_Y, 8, 0);
-				SDL_EnableUNICODE(1);
-				SDL_EnableKeyRepeat(500, 30);
-			}
-
-			// Refresh SDL display from emulated graphics card video RAM
-			s->vid_mem_base = s->mem + 0xB0000 + 0x8000*(s->mem[0x4AC] ? 1 : s->io_ports[0x3B8] >> 7); // B800:0 for CGA/Hercules bank 2, B000:0 for Hercules bank 1
-			for (int i = 0; i < s->GRAPHICS_X * s->GRAPHICS_Y / 4; i++)
-				((unsigned *)sdl_screen->pixels)[i] = s->pixel_colors[15 & (s->vid_mem_base[vid_addr_lookup[i]] >> 4*!(i & 1))];
-
-			SDL_Flip(sdl_screen);
-		}
-		else if (sdl_screen) // Application has gone back to text mode, so close the SDL window
-		{
-			SDL_QuitSubSystem(SDL_INIT_VIDEO);
-			sdl_screen = 0;
-		}
-		SDL_PumpEvents();
+		s->redraw_display(s);
 	}
 #endif
 }
@@ -993,9 +905,11 @@ void x86_handle_irqs(struct x86_state *s)
 		// If a timer tick is pending, interrupts are enabled, and no overrides/REP are active,
 		// then process the tick and check for new keystrokes
 		if (!s->setting_ss && s->int8_asap && s->regs8[FLAG_IF] && !s->regs8[FLAG_TF]) {
+			/* We call int 0xa (8086tiny internal), which is a BIOS routine which calls int 8 (timer) at the correct
+			 * rate -- hence the 'int8' in the variable name. */
 			pc_interrupt(s, 0xA);
 			s->int8_asap = 0;
-			sdl_keyboard_driver(s);
+			s->keyboard_driver(s);
 		}
 	}
 }

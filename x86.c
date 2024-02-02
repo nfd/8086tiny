@@ -232,12 +232,14 @@ code_to_utf8(unsigned char *const buffer,
 }
 
 
-struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_filename, char *hdd_filename, void(*redraw_display)(struct x86_state *), void(*keyboard_driver)(struct x86_state *), void(*pause_audio)(int pause)) {
+struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_filename, char *hdd_filename, void(*redraw_display)(struct x86_state *), void(*keyboard_driver)(struct x86_state *), void(*pause_audio)(int pause), ssize_t(*read)(int, void *, size_t), ssize_t(*write)(int, const void *, size_t)) {
 	struct x86_state *s = calloc(1, sizeof(struct x86_state));
 
 	s->redraw_display = redraw_display;
 	s->keyboard_driver = keyboard_driver;
 	s->pause_audio = pause_audio;
+	s->read = read;
+	s->write = write;
 
 	// regs16 and reg8 point to F000:0, the start of memory-mapped registers. CS is initialised to F000
 	s->regs16 = (unsigned short *)(s->regs8 = s->mem + REGS_BASE);
@@ -259,7 +261,7 @@ struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_fil
 	CAST(unsigned)s->regs16[REG_AX] = s->disk_hdd ? lseek(s->disk_hdd, 0, 2) >> 9 : 0;
 
 	// Load BIOS image into F000:0100, and set IP to 0100
-	read(s->disk_bios, s->regs8 + (s->reg_ip = s->reg_ip_before_rep_trace = 0x100), 0xFF00);
+	s->read(s->disk_bios, s->regs8 + (s->reg_ip = s->reg_ip_before_rep_trace = 0x100), 0xFF00);
 
 	// Load instruction decoding helper table
 	for (int i = 0; i < 20; i++)
@@ -676,7 +678,7 @@ void x86_step(struct x86_state *s)
 					unsigned len;
 
 					len = code_to_utf8(buf, cp437_to_utf16[*s->regs8]);
-					write(1, buf, len);
+					s->write(1, buf, len);
 				}
 				OPCODE 1: // GET_RTC
 					time(&s->clock_buf);
@@ -693,9 +695,14 @@ void x86_step(struct x86_state *s)
 						case 0: disk = s->disk_hdd; break;
 					}
 
-					s->regs8[REG_AL] = ~lseek(disk, CAST(unsigned)s->regs16[REG_BP] << 9, 0)
-					? ((char)s->i_data0 == 3 ? (int(*)())write : (int(*)())read)(disk, s->mem + SEGREG(REG_ES, REG_BX,), s->regs16[REG_AX])
-					: 0;
+					if(lseek(disk, CAST(unsigned)s->regs16[REG_BP] << 9, 0) != -1) {
+						if(s->i_data0 == 3) {
+							s->regs8[REG_AL] = s->write(disk, s->mem + SEGREG(REG_ES, REG_BX,), s->regs16[REG_AX]);
+						} else {
+							s->regs8[REG_AL] = s->read(disk, s->mem + SEGREG(REG_ES, REG_BX,), s->regs16[REG_AX]);
+						}
+					}
+
 				}
 				OPCODE 4:	// XMS
 					callxms(s);

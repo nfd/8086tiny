@@ -1,5 +1,6 @@
 #include <time.h>
 #include <sys/timeb.h>
+#include <unistd.h>
 
 // Emulator system constants
 #define IO_PORT_COUNT 0x10000
@@ -50,6 +51,8 @@ struct x86_state {
 	void (*redraw_display)(struct x86_state *);
 	void (*keyboard_driver)(struct x86_state *);
 	void (*pause_audio)(int pause);
+	ssize_t (*read)(int fd, void *buf, size_t count);
+	ssize_t (*write)(int fd, const void *buf, size_t count);
 	int op_result, disk_bios, disk_fdd, disk_hdd;
 	time_t clock_buf;
 	struct timeb ms_clock;
@@ -60,7 +63,7 @@ struct x86_state {
 	unsigned char mem[RAM_SIZE + 16];
 };
 
-struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_filename, char *hdd_filename, void(*redraw_display)(struct x86_state *), void(*keyboard_driver)(struct x86_state *), void(*pause_audio)(int pause));
+struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_filename, char *hdd_filename, void(*redraw_display)(struct x86_state *), void(*keyboard_driver)(struct x86_state *), void(*pause_audio)(int pause), ssize_t(*read)(int, void *, size_t), ssize_t(*write)(int, const void *, size_t));
 void x86_free(struct x86_state *);
 void x86_step(struct x86_state *);
 void x86_handle_hlt(struct x86_state *s);

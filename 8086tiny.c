@@ -30,10 +30,6 @@
  * we can work around the FreeCOM bug.
  */
 
-#ifndef GRAPHICS_UPDATE_DELAY
-#define GRAPHICS_UPDATE_DELAY 360000
-#endif
-
 #ifdef XMS_DEBUG
 #include <stdio.h>
 #endif
@@ -56,7 +52,7 @@
 // Keyboard driver for console. This may need changing for UNIX/non-UNIX platforms
 #ifdef _WIN32
 void keyboard_driver(struct x86_state *s) {
-	kbhit() && (s->mem[0x4A6] = getch(), pc_interrupt(7));
+	kbhit() && (s->mem[0x4A6] = getch(), pc_interrupt(s, 7));
 }
 #else
 void keyboard_driver(struct x86_state *s) {
@@ -77,6 +73,8 @@ void sdl_keyboard_driver(struct x86_state *s) {
 }
 
 void sdl_pause_audio(int pause) { }
+
+void sdl_redraw_display(struct x86_state *s) { }
 
 #else
 
@@ -157,6 +155,14 @@ void sdl_pause_audio(int pause) {
 }
 #endif
 
+ssize_t emu_read(int fd, void *buf, size_t count) {
+	return read(fd, buf, count);
+}
+
+ssize_t emu_write(int fd, const void *buf, size_t count) {
+	return write(fd, buf, count);
+}
+
 // Emulator entry point
 int main(int argc, char **argv)
 {
@@ -176,7 +182,7 @@ int main(int argc, char **argv)
 		argv[3]++;
 	}
 
-	struct x86_state *s = x86_init(boot_from_hdd, argv[1], argv[2], argv[3], sdl_redraw_display, sdl_keyboard_driver, sdl_pause_audio);
+	struct x86_state *s = x86_init(boot_from_hdd, argv[1], argv[2], argv[3], sdl_redraw_display, sdl_keyboard_driver, sdl_pause_audio, emu_read, emu_write);
 #ifndef NO_GRAPHICS
 	sdl_audio.userdata = s;
 	SDL_OpenAudio(&sdl_audio, 0);

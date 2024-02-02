@@ -30,6 +30,11 @@ encouraged!
 Any questions, comments or suggestions are very welcome
 in our forum at 8086tiny.freeforums.net.
 
+nfd's fork
+==========
+I forked ecm's fork (see below) to support running more than
+one instance of the emulator in one address space, which means
+removing all the global variables and consolidating the IO.
 
 ecm's fork
 ==========

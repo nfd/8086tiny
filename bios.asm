@@ -1809,7 +1809,7 @@ int10_scroll_down_vmem_update:
 	mov	bx, 0x40
 	mov	es, bx
 
-	mov	bx, 0xc000
+	mov	bx, 0xb800
 	mov	ds, bx
 
 	mov	bx, 160
@@ -1839,9 +1839,7 @@ int10_scroll_down_vmem_update:
 
   int10_write_char:
 
-	; First write the character to a buffer at C000:0. This is so that
-	; we can later retrieve it using the get character at cursor function,
-	; which GWBASIC uses.
+	; write the character to b800:0 if it's not a control character
 
 	push	ds
 	push	es
@@ -1859,7 +1857,7 @@ int10_scroll_down_vmem_update:
 	mov	bx, 0x40
 	mov	es, bx
 
-	mov	bx, 0xc000
+	mov	bx, 0xb800
 	mov	ds, bx
 
 	mov	bx, 160
@@ -1872,7 +1870,14 @@ int10_scroll_down_vmem_update:
 	shl	bx, 1
 	add	bx, ax
 
+	; if it's a control character, jump directly to the line skip
+	call is_control_character
+	cmp	ax, 0
+	jnz 	int10_write_char_no_display_update
+
 	mov	[bx], cx
+
+	int10_write_char_no_display_update:
 
 	pop	ax
 	push	ax
@@ -1883,10 +1888,9 @@ int10_scroll_down_vmem_update:
 
   int10_write_char_attrib:
 
-	; First write the character to a buffer at C000:0. This is so that
-	; we can later retrieve it using the get character at cursor function,
-	; which GWBASIC uses.
+	; First write the character to b800:0.
 
+	pushf
 	push	ds
 	push	es
 	push	cx
@@ -1904,7 +1908,7 @@ int10_scroll_down_vmem_update:
 	mov	bx, 0x40
 	mov	es, bx
 
-	mov	bx, 0xc000
+	mov	bx, 0xb800
 	mov	ds, bx
 
 	mov	bx, 160
@@ -1995,7 +1999,7 @@ cpu	8086
 	pop	ds
 
 	cmp	al, 0x08
-	jne	int10_write_char_attrib_inc_x
+	jne	int10_write_char_attrib_not_bs
 
 	dec	byte [curpos_x-bios_data]
 	dec	byte [crt_curpos_x-bios_data]
@@ -2006,7 +2010,7 @@ cpu	8086
 	mov	byte [crt_curpos_x-bios_data], 0
 	jmp	int10_write_char_attrib_done
 
-    int10_write_char_attrib_inc_x:
+    int10_write_char_attrib_not_bs:
 
 	cmp	al, 0x0A	; New line?
 	je	int10_write_char_attrib_newline
@@ -2441,6 +2445,7 @@ wr_fine:
 
     gdt_hd:
 
+	; TODO the hdd parameters seem totally bogus
 	mov	ah, 3
 	mov	cx, [cs:hd_secs_hi]
 	mov	dx, [cs:hd_secs_lo]
@@ -3683,6 +3688,21 @@ ansi_hide_cursor:
 	mov	al, 'l'
 	extended_putchar_al
 
+	ret
+
+; set ax to 1 if the character in al is a control character, 0 otherwise
+; Control characters are CR and LF.
+is_control_character:
+	cmp cl, 8
+	je	is_control_character_yes
+	cmp	cl, 13
+	je	is_control_character_yes
+	cmp	cl, 10
+	je	is_control_character_yes
+	xor	ax, ax
+	ret
+	is_control_character_yes:
+	mov	ax, 1
 	ret
 
 ; ****************************************************************************************

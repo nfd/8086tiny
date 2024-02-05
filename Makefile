@@ -19,11 +19,11 @@ bios.bin: bios.asm
 tinyxms.sys: tinyxms.asm
 	nasm -f bin -I ../lmacros/ -I lmacros/ -l tinyxms.lst -o tinyxms.sys tinyxms.asm
 
-8086tiny: 8086tiny.c bios.bin tinyxms.sys x86.c x86.h
+8086tiny: 8086tiny.c bios.bin tinyxms.sys x86.c x86.h hercplus.h
 	${CC} 8086tiny.c x86.c ${OPTS_SDL} ${OPTS_ALL} -o 8086tiny
 	strip 8086tiny
 
-8086tiny_slowcpu: 8086tiny.c bios.bin tinyxms.sys x86.c x86.h
+8086tiny_slowcpu: 8086tiny.c bios.bin tinyxms.sys x86.c x86.h hercplus.h
 	${CC} 8086tiny.c x86.c ${OPTS_SDL} ${OPTS_ALL} ${OPTS_SLOWCPU} -o 8086tiny
 	strip 8086tiny
 

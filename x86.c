@@ -3,11 +3,37 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include <time.h>
 
 #include "x86.h"
 #include "cp437.h"
+
+// #define XMS_DEBUG 1
+// #define XMS_FAIL_FIRST_ALLOC 1
+/* FreeCOM with XMS Swap seems to break when it loads
+ * into our XMS. Various errors occur with different versions.
+ * As a workaround, this fails FreeCOM's XMS allocation.
+ * After that, for example, lDebug symbolic can use XMS.
+ *
+ * Update: I found the FreeCOM bug and reported it at
+ * https://github.com/FDOS/freecom/issues/15
+ *
+ * With the support for the push imm16 instruction,
+ * we can work around the FreeCOM bug.
+ */
+
+#ifdef XMS_DEBUG
+#include <stdio.h>
+#endif
+#ifdef INT6_DEBUG
+#include <stdio.h>
+#endif
+#ifdef IMUL_DEBUG
+#include <stdio.h>
+#endif
+
 
 #define MASK_SHIFT_COUNT(count) (31 & (count))
 // change this to just (count) to be detected as an 8086
@@ -263,6 +289,15 @@ struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_fil
 	// Load BIOS image into F000:0100, and set IP to 0100
 	s->read(s->disk_bios, s->regs8 + (s->reg_ip = s->reg_ip_before_rep_trace = 0x100), 0xFF00);
 
+	// Initialise the graphics card for text mode. This is so it's immediately ready
+	// if we're using SDL for text mode as well. This is copied from bios init.
+	uint8_t herc_data;
+	herc_data = 0;
+	callout(s, &herc_data, 0x3B8);  // text mode
+	
+	s->text_vid_mem = s->mem + 0xB8000;
+	s->text_vid_mem_double_buffer = s->mem + 0xB0000;
+	
 	// Load instruction decoding helper table
 	for (int i = 0; i < 20; i++)
 		for (int j = 0; j < 256; j++)

@@ -715,27 +715,31 @@ void x86_step(struct x86_state *s)
 					len = code_to_utf8(buf, cp437_to_utf16[*s->regs8]);
 					s->write(1, buf, len);
 				}
-				OPCODE 1: // GET_RTC
+				OPCODE 1: {// GET_RTC
+					struct timeval tv;
 					time(&s->clock_buf);
-				ftime(&s->ms_clock);
-				memcpy(s->mem + SEGREG(REG_ES, REG_BX,), localtime(&s->clock_buf), sizeof(struct tm));
-				CAST(short)s->mem[SEGREG(REG_ES, REG_BX, 36+)] = s->ms_clock.millitm;
+					gettimeofday(&tv, NULL);
+					memcpy(s->mem + SEGREG(REG_ES, REG_BX,), localtime(&s->clock_buf), sizeof(struct tm));
+					CAST(short)s->mem[SEGREG(REG_ES, REG_BX, 36+)] = tv.tv_usec / 1000;
+				}
 				OPCODE 2: // DISK_READ
 				OPCODE_CHAIN 3: // DISK_WRITE
 				{
 					int disk = 0;
 					switch(s->regs8[REG_DL]) {
-						case 2: disk = s->disk_bios; break;
 						case 1: disk = s->disk_fdd; break;
 						case 0: disk = s->disk_hdd; break;
+						default: disk = -1;
 					}
 
-					if(lseek(disk, CAST(unsigned)s->regs16[REG_BP] << 9, 0) != -1) {
-						if(s->i_data0 == 3) {
+					if(disk != -1 && lseek(disk, CAST(unsigned)s->regs16[REG_BP] << 9, 0) != -1) {
+						if((char)(s->i_data0) == 3) {
 							s->regs8[REG_AL] = s->write(disk, s->mem + SEGREG(REG_ES, REG_BX,), s->regs16[REG_AX]);
 						} else {
 							s->regs8[REG_AL] = s->read(disk, s->mem + SEGREG(REG_ES, REG_BX,), s->regs16[REG_AX]);
 						}
+					} else {
+						s->regs8[REG_AL] = 0;
 					}
 
 				}

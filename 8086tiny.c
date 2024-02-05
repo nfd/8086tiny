@@ -10,6 +10,8 @@
 
 #define USE_SDL_FOR_TEXT 1
 
+#define MIN_MS_PER_FRAME (1000 / 60)
+
 #include <time.h>
 #include <sys/timeb.h>
 #include <memory.h>
@@ -58,11 +60,11 @@ void sdl_redraw_display(struct x86_state *s) { }
 #else
 
 SDL_Surface *sdl_screen;
-int cursor_x = 1, cursor_y = 1;  /* Match ANSI, use origin of (1,1) */
 
 unsigned short vid_addr_lookup[VIDEO_RAM_SIZE], cga_colors[4] = {0 /* Black */, 0x1F1F /* Cyan */, 0xE3E3 /* Magenta */, 0xFFFF /* White */};
 unsigned char text_colours[16] = {0b00000000, 0b00000010, 0b00010000, 0b00010010, 0b10000000, 0b10000010, 0b10001000, 0b10010010, 0b00100101, 0b00000011, 0b00011100, 0b00011111, 0b11100000, 0b11100011, 0b11111100, 0b11111111};
 SDL_AudioSpec sdl_audio = {44100, AUDIO_U8, 1, 0, 128};
+uint32_t last_redraw_time_ms = 0;
 
 void sdl_keyboard_driver(struct x86_state *s) {
 	unsigned int scratch_uint, scratch2_uint;
@@ -140,6 +142,13 @@ void sdl_redraw_text(struct x86_state *s) {
 	 * We should just write everything to b800 and let the vmem driver sort it out. It seems that this driver
 	 * may have been written later.
 	*/
+	uint32_t now = SDL_GetTicks();
+	if(now - last_redraw_time_ms < MIN_MS_PER_FRAME) {
+		return;
+	}
+
+	last_redraw_time_ms = now;
+
 	sdl_create_screen(s);
 
 	unsigned char *text_mem = s->text_vid_mem;
@@ -187,6 +196,22 @@ void sdl_redraw_text(struct x86_state *s) {
 
 			*(uint16_t *)&text_mem_double_buffer[y*160 + x*2] = ch_attr;
 		}
+	}
+
+	// Draw cursor
+	unsigned char cursor_x = s->mem[0x450];
+	unsigned char cursor_y = s->mem[0x451];
+
+	if(cursor_x < 80 && cursor_y < 25) {
+		for(int y = 11; y < 14; y++) {
+			unsigned char *dst = (unsigned char *)sdl_screen->pixels + (cursor_y*14 + y)*sdl_screen->pitch + cursor_x*9;
+			for(int i = 0; i < 9; i++) {
+				*dst++ ^= 0xFF;
+			}
+		}
+
+		// Update the double buffer
+		*(uint16_t *)&text_mem_double_buffer[cursor_y*160 + cursor_x*2] ^= 0x0F00;
 	}
 
 	SDL_Flip(sdl_screen);

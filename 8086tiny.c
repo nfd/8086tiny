@@ -12,6 +12,7 @@
 
 #define MIN_MS_PER_FRAME (1000 / 60)
 
+#include <termios.h>
 #include <time.h>
 #include <sys/timeb.h>
 #include <memory.h>
@@ -269,6 +270,14 @@ ssize_t emu_write(int fd, const void *buf, size_t count) {
 	return write(fd, buf, count);
 }
 
+#ifndef _WIN32
+// exit handler for restoring the terminal to its original state
+struct termios _original_term;
+void restore_terminal(void) {
+	tcsetattr(0, TCSANOW, &_original_term);
+}
+#endif
+
 // Emulator entry point
 int main(int argc, char **argv)
 {
@@ -279,6 +288,22 @@ int main(int argc, char **argv)
 #ifdef _WIN32
 	sdl_audio.samples = 512;
 #endif
+#endif
+
+#ifndef _WIN32
+	/* Effectively enable raw mode and nonblocking reads. */
+	struct termios term;
+	tcgetattr(0, &term);
+	_original_term = term;
+	term.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN | ISIG);
+	term.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+	term.c_cflag &= ~(CSIZE | PARENB);
+	term.c_cc[VMIN] = 0;
+	term.c_cc[VTIME] = 0;
+	tcsetattr(0, TCSANOW, &term);
+
+	// set a handler to restore the terminal to its original state
+	atexit(restore_terminal);
 #endif
 
 	// If the HD image file is prefixed with @, then boot from the HD

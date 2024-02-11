@@ -18,6 +18,7 @@
 #include <memory.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #include "x86.h"
 #include "hercplus.h"
@@ -322,8 +323,13 @@ int main(int argc, char **argv)
 	// Instruction execution loop. Terminates if CS:IP = 0:0
 	for (; s->opcode_stream = s->mem + 16 * s->regs16[REG_CS] + s->reg_ip, s->opcode_stream != s->mem;)
 	{
+		uint32_t sleep_us;
+
 		x86_step(s);
-		x86_handle_hlt(s);
+		if((sleep_us = x86_handle_hlt(s))) {
+			struct timespec ts = {0, sleep_us * 1000};
+			nanosleep(&ts, NULL);
+		}
 		x86_handle_irqs(s);
 	}
 

@@ -922,17 +922,18 @@ void x86_step(struct x86_state *s)
 #endif
 }
 
-void x86_handle_hlt(struct x86_state *s)
+/* Return a number of microseconds to sleep, if HLT was executed, or 0 if not */
+uint32_t x86_handle_hlt(struct x86_state *s)
 {
 	if (s->hlt_this_time) {
-		struct timespec ts;
-		ts.tv_sec = 0;
-		ts.tv_nsec = HALT_TIME_MICROSECONDS * 1000;
-		nanosleep(&ts, NULL);
 		s->hlt_this_time = 0;
 		s->keyboard_timer_inst_counter += KEYBOARD_TIMER_DELAY_FROM_HALT;
 		s->graphics_inst_counter += GRAPHICS_DELAY_FROM_HALT;
+
+		return HALT_TIME_MICROSECONDS;
 	}
+
+	return 0;
 }
 
 void x86_handle_irqs(struct x86_state *s)

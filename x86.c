@@ -80,7 +80,7 @@
 
 // Decode mod, r_m and reg fields in instruction
 #define DECODE_RM_REG s->scratch2_uint = 4 * !s->i_mod, \
-	s->op_to_addr = s->rm_addr = s->i_mod < 3 ? SEGREG(s->seg_override_en ? s->seg_override : bios_table_lookup[s->scratch2_uint + 3][s->i_rm], bios_table_lookup[s->scratch2_uint][s->i_rm], s->regs16[bios_table_lookup[s->scratch2_uint + 1][s->i_rm]] + bios_table_lookup[s->scratch2_uint + 2][s->i_rm] * s->i_data1+) : GET_REG_ADDR(s->i_rm), \
+	s->op_to_addr = s->rm_addr = s->i_mod < 3 ? SEGREG(s->seg_override_en ? s->seg_override : instruction_TABLE_RM[s->scratch2_uint + 3][s->i_rm], instruction_TABLE_RM[s->scratch2_uint][s->i_rm], s->regs16[instruction_TABLE_RM[s->scratch2_uint + 1][s->i_rm]] + instruction_TABLE_RM[s->scratch2_uint + 2][s->i_rm] * s->i_data1+) : GET_REG_ADDR(s->i_rm), \
 	s->op_from_addr = GET_REG_ADDR(s->i_reg), \
 	s->i_d && (s->scratch_uint = s->op_from_addr, s->op_from_addr = s->rm_addr, s->op_to_addr = s->scratch_uint)
 
@@ -131,8 +131,168 @@
 // Reinterpretation cast
 #define CAST(a) *(a*)&
 
-// Global variable definitions
-unsigned char bios_table_lookup[20][256];
+// Instruction decode helpers, pulled out of the BIOS.
+static const unsigned char instruction_TABLE_RM[8][8] = {
+	// Table 0: R/M mode 1/2 "register 1" lookup
+	{3, 3, 5, 5, 6, 7, 5, 3},
+	// Table 1: R/M mode 1/2 "register 2" lookup
+	{6, 7, 6, 7, 12, 12, 12, 12},
+	// Table 2: R/M mode 1/2 "DISP multiplier" lookup
+	{1, 1, 1, 1, 1, 1, 1, 1},
+	// Table 3: R/M mode 1/2 "default segment" lookup
+	{11, 11, 10, 10, 11, 11, 10, 11},
+	// Table 4: Table 4: R/M mode 0 "register 1" lookup
+	{3, 3, 5, 5, 6, 7, 12, 3},
+	// Table 5: R/M mode 0 "register 2" lookup (same as mode 1/2)
+	{6, 7, 6, 7, 12, 12, 12, 12},
+	// Table 6: R/M mode 0 "DISP multiplier" lookup
+	{0, 0, 0, 0, 0, 0, 1, 0},
+	// Table 7: R/M mode 0 "default segment" lookup
+	{11, 11, 10, 10, 11, 11, 11, 11}
+};
+// Table 8: Translation of raw opcode index ("Raw ID") to function number ("Xlat'd ID")
+static const unsigned char instruction_TABLE_XLAT_OPCODE[] = {
+	/*.00*/ 9, 9, 9, 9, 7, 7, 25, 26, 9, 9, 9, 9, 7, 7, 25, 48,
+	/*.10*/ 9, 9, 9, 9, 7, 7, 25, 26, 9, 9, 9, 9, 7, 7, 25, 26,
+	/*.20*/ 9, 9, 9, 9, 7, 7, 27, 28, 9, 9, 9, 9, 7, 7, 27, 28,
+	/*.30*/ 9, 9, 9, 9, 7, 7, 27, 29, 9, 9, 9, 9, 7, 7, 27, 29,
+	/*.40*/ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+	/*.50*/ 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4,
+	/*.60*/ 104, 105, 109, 52, 52, 52, 52, 52, 101, 108, 102, 108, 110, 110, 110, 110,
+	/*.70*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.80*/ 8, 8, 8, 8, 15, 15, 24, 24, 9, 9, 9, 9, 10, 10, 10, 10,
+	/*.90*/ 16, 16, 16, 16, 16, 16, 16, 16, 30, 31, 32, 103, 33, 34, 35, 36,
+	/*.A0*/ 11, 11, 11, 11, 17, 17, 18, 18, 47, 47, 17, 17, 17, 17, 18, 18,
+	/*.B0*/ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/*.C0*/ 12, 12, 19, 19, 37, 37, 20, 20, 106, 107, 19, 19, 38, 39, 40, 19,
+	/*.D0*/ 12, 12, 12, 12, 41, 42, 43, 44, 103, 103, 103, 103, 103, 103, 103, 103,
+	/*.E0*/ 13, 13, 13, 13, 21, 21, 22, 22, 14, 14, 14, 14, 21, 21, 22, 22,
+	/*.F0*/ 111, 112, 23, 23, 100, 45, 6, 6, 46, 46, 46, 46, 46, 46, 5, 5
+};
+// Table 9: Translation of Raw ID to Extra Data
+static const unsigned char instruction_TABLE_XLAT_SUBFUNCTION[] = {
+	/*.00*/ 0, 0, 0, 0, 0, 0, 8, 8, 1, 1, 1, 1, 1, 1, 9, 36,
+	/*.10*/ 2, 2, 2, 2, 2, 2, 10, 10, 3, 3, 3, 3, 3, 3, 11, 11,
+	/*.20*/ 4, 4, 4, 4, 4, 4, 8, 0, 5, 5, 5, 5, 5, 5, 9, 1,
+	/*.30*/ 6, 6, 6, 6, 6, 6, 10, 2, 7, 7, 7, 7, 7, 7, 11, 0,
+	/*.40*/ 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1,
+	/*.50*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.60*/ 0, 0, 21, 21, 21, 21, 21, 21, 0, 1, 0, 0, 1, 1, 2, 2,
+	/*.70*/ 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+	/*.80*/ 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8, 12, 12, 12, 12,
+	/*.90*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 0,
+	/*.A0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 1, 1,
+	/*.B0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.C0*/ 1, 1, 0, 0, 16, 22, 0, 0, 0, 0, 1, 1, 0, 255, 48, 2,
+	/*.D0*/ 0, 0, 0, 0, 255, 255, 40, 11, 3, 3, 3, 3, 3, 3, 3, 3,
+	/*.E0*/ 43, 43, 43, 43, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+	/*.F0*/ 1, 21, 0, 0, 2, 40, 21, 21, 80, 81, 92, 93, 94, 95, 0, 0
+};
+// Table 10: How each Raw ID sets the flags (bit 1 = sets SZP, bit 2 = sets AF/OF for arithmetic, bit 3 = sets OF/CF for logic)
+static const unsigned char instruction_TABLE_STD_FLAGS[] = {
+	/*.00*/ 3, 3, 3, 3, 3, 3, 0, 0, 5, 5, 5, 5, 5, 5, 0, 0,
+	/*.10*/ 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0,
+	/*.20*/ 5, 5, 5, 5, 5, 5, 0, 1, 3, 3, 3, 3, 3, 3, 0, 1,
+	/*.30*/ 5, 5, 5, 5, 5, 5, 0, 1, 3, 3, 3, 3, 3, 3, 0, 1,
+	/*.40*/ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/*.50*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.60*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.70*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.80*/ 1, 1, 1, 1, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.90*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.A0*/ 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0,
+	/*.B0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.C0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.D0*/ 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.E0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.F0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+// Table 11: Parity flag loop-up table (256 entries)
+static const unsigned char instruction_TABLE_PARITY_FLAG[] = {
+	1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
+	0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
+	0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
+	1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
+	0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
+	1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
+	1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
+	0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
+	0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
+	1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
+	1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
+	0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
+	1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
+	0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
+	0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
+	1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1
+};
+// Table 12: Translation of Raw ID to base instruction size (bytes)
+static const unsigned char instruction_TABLE_BASE_INST_SIZE[] = {
+	/*.00*/ 2, 2, 2, 2, 1, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 2,
+	/*.10*/ 2, 2, 2, 2, 1, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1,
+	/*.20*/ 2, 2, 2, 2, 1, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1,
+	/*.30*/ 2, 2, 2, 2, 1, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1,
+	/*.40*/ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/*.50*/ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/*.60*/ 1, 1, 2, 1, 1, 1, 1, 1, 3, 4, 2, 3, 1, 1, 1, 1,
+	/*.70*/ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+	/*.80*/ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+	/*.90*/ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1,
+	/*.A0*/ 3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/*.B0*/ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/*.C0*/ 3, 3, 0, 0, 2, 2, 2, 2, 4, 1, 0, 0, 0, 0, 0, 0,
+	/*.D0*/ 2, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2,
+	/*.E0*/ 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 1, 1, 1, 1,
+	/*.F0*/ 1, 2, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2
+};
+// Table 13: Translation of Raw ID to i_w size adder yes/no
+static const unsigned char instruction_TABLE_I_W_SIZE[] = {
+	/*.00*/ 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0,
+	/*.10*/ 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0,
+	/*.20*/ 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0,
+	/*.30*/ 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0,
+	/*.40*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.50*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.60*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.70*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.80*/ 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.90*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.A0*/ 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0,
+	/*.B0*/ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/*.C0*/ 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.D0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.E0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.F0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+// Table 14: Translation of Raw ID to i_mod size adder yes/no (TABLE_I_MOD_SIZE)
+static const unsigned char instruction_TABLE_I_MOD_SIZE[] = {
+	/*.00*/ 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0,
+	/*.10*/ 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0,
+	/*.20*/ 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0,
+	/*.30*/ 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0,
+	/*.40*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.50*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.60*/ 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0,
+	/*.70*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.80*/ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/*.90*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.A0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.B0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.C0*/ 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.D0*/ 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1,
+	/*.E0*/ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/*.F0*/ 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1
+};
+// Table 15: Jxx decode table A
+static const unsigned char instruction_TABLE_COND_JUMP_DECODE_A[] = {48, 40, 43, 40, 44, 41, 49, 49};
+// Table 16: Jxx decode table B
+static const unsigned char instruction_TABLE_COND_JUMP_DECODE_B[] = {49, 49, 49, 43, 49, 49, 49, 43};
+// Table 17: Jxx decode table C
+static const unsigned char instruction_TABLE_COND_JUMP_DECODE_C[] = {49, 49, 49, 49, 49, 49, 44, 44};
+// Table 18: Jxx decode table D
+static const unsigned char instruction_TABLE_COND_JUMP_DECODE_D[] = {49, 49, 49, 49, 49, 49, 48, 48};
+// Table 19: FLAGS multipliers
+static const unsigned char instruction_TABLE_FLAGS_BITFIELDS[] = {0, 2, 4, 6, 7, 8, 9, 10, 11};
 
 // Helper functions
 
@@ -171,24 +331,24 @@ void make_flags(struct x86_state *s)
 {
 	s->scratch_uint = 0xF002; // 8086 has reserved and unused flags set to 1
 	for (int i = 9; i--;)
-		s->scratch_uint += s->regs8[FLAG_CF + i] << bios_table_lookup[TABLE_FLAGS_BITFIELDS][i];
+		s->scratch_uint += s->regs8[FLAG_CF + i] << instruction_TABLE_FLAGS_BITFIELDS[i];
 }
 
 // Set emulated CPU FLAGS register from regs8[FLAG_xx] values
 void set_flags(struct x86_state *s, int new_flags)
 {
 	for (int i = 9; i--;)
-		s->regs8[FLAG_CF + i] = !!(1 << bios_table_lookup[TABLE_FLAGS_BITFIELDS][i] & new_flags);
+		s->regs8[FLAG_CF + i] = !!(1 << instruction_TABLE_FLAGS_BITFIELDS[i] & new_flags);
 }
 
 // Convert raw opcode to translated opcode index. This condenses a large number of different encodings of similar
 // instructions into a much smaller number of distinct functions, which we then execute
 void set_opcode(struct x86_state *s, unsigned char opcode)
 {
-	s->xlat_opcode_id = bios_table_lookup[TABLE_XLAT_OPCODE][s->raw_opcode_id = opcode];
-	s->extra = bios_table_lookup[TABLE_XLAT_SUBFUNCTION][opcode];
-	s->i_mod_size = bios_table_lookup[TABLE_I_MOD_SIZE][opcode];
-	s->set_flags_type = bios_table_lookup[TABLE_STD_FLAGS][opcode];
+	s->xlat_opcode_id = instruction_TABLE_XLAT_OPCODE[s->raw_opcode_id = opcode];
+	s->extra = instruction_TABLE_XLAT_SUBFUNCTION[opcode];
+	s->i_mod_size = instruction_TABLE_I_MOD_SIZE[opcode];
+	s->set_flags_type = instruction_TABLE_STD_FLAGS[opcode];
 }
 
 // Execute INT #interrupt_num on the emulated machine
@@ -311,11 +471,6 @@ struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_fil
 	s->text_vid_mem = s->mem + 0xB8000;
 	s->text_vid_mem_double_buffer = s->mem + 0xB0000;
 	
-	// Load instruction decoding helper table
-	for (int i = 0; i < 20; i++)
-		for (int j = 0; j < 256; j++)
-			bios_table_lookup[i][j] = s->regs8[s->regs16[0x81 + i] + j];
-
 	return s;
 }
 
@@ -378,7 +533,7 @@ void x86_step(struct x86_state *s)
 		OPCODE_CHAIN 0: // Conditional jump (JAE, JNAE, etc.)
 						// i_w is the invert flag, e.g. i_w == 1 means JNAE, whereas i_w == 0 means JAE
 			s->scratch_uchar = s->raw_opcode_id / 2 & 7;
-		s->reg_ip += (char)s->i_data0 * (s->i_w ^ (s->regs8[bios_table_lookup[TABLE_COND_JUMP_DECODE_A][s->scratch_uchar]] || s->regs8[bios_table_lookup[TABLE_COND_JUMP_DECODE_B][s->scratch_uchar]] || s->regs8[bios_table_lookup[TABLE_COND_JUMP_DECODE_C][s->scratch_uchar]] ^ s->regs8[bios_table_lookup[TABLE_COND_JUMP_DECODE_D][s->scratch_uchar]]))
+		s->reg_ip += (char)s->i_data0 * (s->i_w ^ (s->regs8[instruction_TABLE_COND_JUMP_DECODE_A[s->scratch_uchar]] || s->regs8[instruction_TABLE_COND_JUMP_DECODE_B[s->scratch_uchar]] || s->regs8[instruction_TABLE_COND_JUMP_DECODE_C[s->scratch_uchar]] ^ s->regs8[instruction_TABLE_COND_JUMP_DECODE_D[s->scratch_uchar]]))
 			OPCODE 1: // MOV reg, imm
 			s->i_w = !!(s->raw_opcode_id & 8);
 		R_M_OP(s->mem[GET_REG_ADDR(s->i_reg4bit)], =, s->i_data0)
@@ -896,7 +1051,7 @@ void x86_step(struct x86_state *s)
 
 	// Increment instruction pointer by computed instruction length. Tables in the BIOS binary
 	// help us here.
-	s->reg_ip += (s->i_mod*(s->i_mod != 3) + 2*(!s->i_mod && s->i_rm == 6))*s->i_mod_size + bios_table_lookup[TABLE_BASE_INST_SIZE][s->raw_opcode_id] + bios_table_lookup[TABLE_I_W_SIZE][s->raw_opcode_id]*(s->i_w + 1);
+	s->reg_ip += (s->i_mod*(s->i_mod != 3) + 2*(!s->i_mod && s->i_rm == 6))*s->i_mod_size + instruction_TABLE_BASE_INST_SIZE[s->raw_opcode_id] + instruction_TABLE_I_W_SIZE[s->raw_opcode_id]*(s->i_w + 1);
 
 	if (s->reset_ip_after_rep_trace) {
 		s->reg_ip = s->reg_ip_before_rep_trace;
@@ -908,7 +1063,7 @@ void x86_step(struct x86_state *s)
 	{
 		s->regs8[FLAG_SF] = SIGN_OF(s->op_result);
 		s->regs8[FLAG_ZF] = !s->op_result;
-		s->regs8[FLAG_PF] = bios_table_lookup[TABLE_PARITY_FLAG][(unsigned char)s->op_result];
+		s->regs8[FLAG_PF] = instruction_TABLE_PARITY_FLAG[(unsigned char)s->op_result];
 
 		// If instruction is an arithmetic or logic operation, also set AF/OF/CF as appropriate.
 		if (s->set_flags_type & FLAGS_UPDATE_AO_ARITH)

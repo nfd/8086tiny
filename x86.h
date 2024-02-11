@@ -1,11 +1,13 @@
 #include <time.h>
 #include <sys/timeb.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 // Emulator system constants
 #define IO_PORT_COUNT 0x10000
 #define RAM_SIZE 0x10FFF0
 #define REGS_BASE 0xF0000
+#define BIOS_BASE 0xF0100
 #define VIDEO_RAM_SIZE 0x10000
 
 // 16-bit register decodes
@@ -53,7 +55,7 @@ struct x86_state {
 	void (*pause_audio)(int pause);
 	ssize_t (*read)(int fd, void *buf, size_t count);
 	ssize_t (*write)(int fd, const void *buf, size_t count);
-	int op_result, disk_bios, disk_fdd, disk_hdd;
+	int op_result, disk_fdd, disk_hdd;
 	time_t clock_buf;
 	unsigned int op_source, op_dest, rm_addr, op_to_addr, op_from_addr, i_data0, i_data1, i_data2, scratch_int, scratch_uint, scratch2_uint, keyboard_timer_inst_counter, graphics_inst_counter, set_flags_type, GRAPHICS_X, GRAPHICS_Y, pixel_colors[16];
 	unsigned short *regs16, reg_ip, seg_override, wave_counter, reg_ip_before_rep_trace;

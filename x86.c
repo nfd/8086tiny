@@ -34,6 +34,12 @@
 #include <stdio.h>
 #endif
 
+#ifdef _WIN32
+#define OPEN_FLAGS _O_RDWR | _O_NOINHERIT | _O_BINARY
+#else
+#define OPEN_FLAGS O_RDWR
+#endif
+
 
 #define MASK_SHIFT_COUNT(count) (31 & (count))
 // change this to just (count) to be detected as an 8086
@@ -278,16 +284,23 @@ struct x86_state *x86_init(int boot_from_hdd, char *bios_filename, char *fdd_fil
 	// But, if the HD image file is prefixed with @, then boot from the HD
 	s->regs8[REG_DL] = boot_from_hdd ? 0x80 : 0;
 
-	// Open BIOS (file id disk[2]), floppy disk image (disk[1]), and hard disk image (disk[0]) if specified
-	if(bios_filename) s->disk_bios = open(bios_filename, 32898);
-	if(fdd_filename) s->disk_fdd = open(fdd_filename, 32898);
-	if(hdd_filename) s->disk_hdd = open(hdd_filename, 32898);
+	// Open floppy disk image (disk[1]), and hard disk image (disk[0]) if specified
+	if(fdd_filename) s->disk_fdd = open(fdd_filename, OPEN_FLAGS);
+	if(hdd_filename) s->disk_hdd = open(hdd_filename, OPEN_FLAGS);
 
 	// Set CX:AX equal to the hard disk image size, if present
+	// TODO this seems not to work as freedos always reads it as 31MB i.e. it doesn't see the cx part
 	CAST(unsigned)s->regs16[REG_AX] = s->disk_hdd ? lseek(s->disk_hdd, 0, 2) >> 9 : 0;
 
-	// Load BIOS image into F000:0100, and set IP to 0100
-	s->read(s->disk_bios, s->regs8 + (s->reg_ip = s->reg_ip_before_rep_trace = 0x100), 0xFF00);
+	// Set IP
+	s->reg_ip = s->reg_ip_before_rep_trace = 0x100;
+
+	// Load BIOS image into F000:0100
+	if(bios_filename) {
+		int disk_bios = open(bios_filename, OPEN_FLAGS);
+		s->read(disk_bios, s->mem + BIOS_BASE, 0xFF00);
+		close(disk_bios);
+	}
 
 	// Initialise the graphics card for text mode. This is so it's immediately ready
 	// if we're using SDL for text mode as well. This is copied from bios init.
